@@ -10,25 +10,33 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 )
 
-var appStats map[string]ProcessStatsResponse
+var appData = make(map[string]AppsListResource)
+var processData = make(map[string]Process)
+var processStats = make(map[string]ProcessStatsResponse)
 
+const colAppName = "Name"
 const colState = "State"
 const colMemory = "Memory"
 const colDisk = "Disk"
 const colType = "Type"
 const colInstances = "# Inst"
+const colIx = "Ix"
+const colHost = "Host"
+const colCpu = "Cpu"
+const colMemUsed = "MemUsed"
 
-var DefaultColumns = []string{colState, colMemory, colDisk, colType, colInstances}
+var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
 	if len(args) != 1 {
 		fmt.Printf("Incorrect Usage: there should be no arguments to this command`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
 		os.Exit(1)
 	}
-	cols := getColumns()
+	colNames := getColNames()
+
+	//
 	// get the /v3/apps data first
 	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?order_by=name&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
@@ -49,7 +57,12 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 	}
+	// convert the json response to a map of AppsListResource keyed by appguid
+	for _, appsListResource := range appsListResponse.Resources {
+		appData[appsListResource.GUID] = appsListResource
+	}
 
+	//
 	// get the /v3/processes data next
 	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest = http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
@@ -65,82 +78,99 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 		os.Exit(1)
 	}
 	body, _ = ioutil.ReadAll(resp.Body)
-	processesListResponse := ProcessesListResponse{}
-	err = json.Unmarshal(body, &processesListResponse)
+	processListResponse := ProcessesListResponse{}
+	err = json.Unmarshal(body, &processListResponse)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 	}
+	// convert the json response to a map of Process keyed by appguid
+	for _, process := range processListResponse.Resources {
+		processData[process.GUID] = process
+	}
 
+	//
 	// optionally get the stats (per app instance stats)
-	appStats = getAppStats(appsListResponse)
+	if processStatsRequired(colNames) {
+		processStats = getAppProcessStats(appsListResponse)
+	}
 
-	table := terminal.NewTable([]string{"Name", "State", "Memory", "Disk", "Instas", "Type", "Created", "Updated", "Buildpacks", "Healthcheck", "Invoc Tmout", "Tmout", "Guid", "Ix", "Host", "Cpu", "Mem Used"})
-	for _, app := range appsListResponse.Resources {
-		var invocTmoutStr = "-"
-		var tmoutStr = "-"
-		if invocTmout := processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.InvocationTimeout; invocTmout != nil {
-			invocTmoutStr = fmt.Sprintf("%v", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.InvocationTimeout.(float64))
+	table := terminal.NewTable(colNames)
+	for _, app := range appData {
+		var colValues []string
+		for _, colName := range colNames {
+			colValues = append(colValues, getColValue(app.GUID, colName))
 		}
-		if tmout := processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.Timeout; tmout != nil {
-			tmoutStr = fmt.Sprintf("%v", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.Timeout.(float64))
-		}
-		table.Add(app.Name,
-			strings.ToLower(app.State),
-			fmt.Sprintf("%d", processForAppGuid(&processesListResponse, app.GUID).MemoryInMb),
-			fmt.Sprintf("%d", processForAppGuid(&processesListResponse, app.GUID).DiskInMb),
-			fmt.Sprintf("%d", processForAppGuid(&processesListResponse, app.GUID).Instances),
-			processForAppGuid(&processesListResponse, app.GUID).Type,
-			app.CreatedAt.Format(time.RFC3339),
-			app.UpdatedAt.Format(time.RFC3339),
-			strings.Join(app.Lifecycle.Data.Buildpacks, ","),
-			fmt.Sprintf("%s", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Type),
-			invocTmoutStr,
-			tmoutStr,
-			app.GUID,
-			getColumnForApp(app.GUID, "ix"),
-			getColumnForApp(app.GUID, "host"),
-			getColumnForApp(app.GUID, "cpu"),
-			getColumnForApp(app.GUID, "mem"),
-		)
+		table.Add(colValues[:]...)
 	}
 	_ = table.PrintTo(os.Stdout)
 }
 
-func getColumns() []string {
+// processStatsRequired - If we want at least one instance level column, we need the app process stats
+func processStatsRequired(colNames []string) bool {
+	for _, colName := range colNames {
+		if colName == colMemUsed || colName == colCpu || colName == colHost {
+			return true
+		}
+	}
+	return false
+}
+
+// getColNames - Find out what the desired columns are specified in envvar CF_COLS, or use the default set of columns
+func getColNames() []string {
 	if os.Getenv("CF_COLS") == "" {
 		return DefaultColumns
 	}
+	return DefaultColumns // TODO, here handle the custom columns
 }
 
-func processForAppGuid(processes *ProcessesListResponse, appguid string) Process {
-	var process Process
-	for _, process = range processes.Resources {
-		if process.Relationships.App.Data.GUID == appguid {
-			return process
-		}
-	}
-	return process
-}
-
-func getColumnForApp(appGuid string, colName string) string {
+func getColValue(appGuid string, colName string) string {
 	var column string
-	for ix, process := range appStats[appGuid].Resources {
-		switch colName {
-		case "ix":
-			column = fmt.Sprintf("%s%d\n", column, ix)
-		case "host":
-			column = fmt.Sprintf("%s%s\n", column, process.Host)
-		case "cpu":
-			column = fmt.Sprintf("%s%.3f\n", column, process.Usage.CPU)
-		case "mem":
-			column = fmt.Sprintf("%s%v\n", column, process.Usage.Mem/1024/1024)
+	// per app instance columns
+	if colName == colIx || colName == colHost || colName == colCpu || colName == colMemUsed {
+		for ix, process := range processStats[appGuid].Resources {
+			switch colName {
+			case colIx:
+				column = fmt.Sprintf("%s%d\n", column, ix)
+			case colHost:
+				column = fmt.Sprintf("%s%s\n", column, process.Host)
+			case colCpu:
+				column = fmt.Sprintf("%s%.3f\n", column, process.Usage.CPU)
+			case colMemUsed:
+				column = fmt.Sprintf("%s%v\n", column, process.Usage.Mem/1024/1024)
+			}
 		}
+	} else {
+		// other columns (not per app instance)
+		switch colName {
+		case colAppName:
+			return appData[appGuid].Name
+		case colState:
+			return appData[appGuid].State
+		case colMemory:
+			return fmt.Sprintf("%d", processData[appGuid].MemoryInMb)
+		case colDisk:
+			return fmt.Sprintf("%d", processData[appGuid].DiskInMb)
+		case colType:
+			return processData[appGuid].Type
+		case colInstances:
+			return fmt.Sprintf("%d", processData[appGuid].Instances)
+		}
+
+		//var invocTmoutStr = "-"
+		//var tmoutStr = "-"
+		//if invocTmout := processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.InvocationTimeout; invocTmout != nil {
+		//	invocTmoutStr = fmt.Sprintf("%v", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.InvocationTimeout.(float64))
+		//}
+		//if tmout := processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.Timeout; tmout != nil {
+		//	tmoutStr = fmt.Sprintf("%v", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.Timeout.(float64))
+		//}
+
 	}
 	return strings.TrimRight(column, "\n")
 }
 
-func getAppStats(appsListResponse AppsListResponse) map[string]ProcessStatsResponse {
-	appStats = make(map[string]ProcessStatsResponse)
+func getAppProcessStats(appsListResponse AppsListResponse) map[string]ProcessStatsResponse {
+	processStats = make(map[string]ProcessStatsResponse)
 	for _, app := range appsListResponse.Resources {
 		requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/processes/%s/stats", apiEndpoint, app.GUID))
 		httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
@@ -159,7 +189,7 @@ func getAppStats(appsListResponse AppsListResponse) map[string]ProcessStatsRespo
 		if err != nil {
 			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 		}
-		appStats[app.GUID] = processesStatsResponse
+		processStats[app.GUID] = processesStatsResponse
 	}
-	return appStats
+	return processStats
 }
