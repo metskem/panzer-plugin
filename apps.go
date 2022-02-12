@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 var appData = make(map[string]AppsListResource)
@@ -21,20 +22,29 @@ const colState = "State"
 const colMemory = "Memory"
 const colDisk = "Disk"
 const colType = "Type"
-const colInstances = "# Inst"
+const colInstances = "Instances"
 const colIx = "Ix"
 const colHost = "Host"
 const colCpu = "Cpu"
 const colMemUsed = "MemUsed"
+const colCreated = "Created"
+const colUpdated = "Updated"
+const colBuildpacks = "Buildpacks"
+const colHealthCheck = "HealthCheck"
+const colHealthCheckInvocationTimeout = "InvocTmout"
+const colHealthCheckTimeout = "Tmout"
+const colGuid = "Guid"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
 	if len(args) != 1 {
 		fmt.Printf("Incorrect Usage: there should be no arguments to this command`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
 		os.Exit(1)
 	}
-	colNames := getColNames()
+	colNames := getRequestedColNames()
 
 	//
 	// get the /v3/apps data first
@@ -94,6 +104,8 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 		processStats = getAppProcessStats(appsListResponse)
 	}
 
+	//
+	// here we start building the table output
 	table := terminal.NewTable(colNames)
 	for _, app := range appData {
 		var colValues []string
@@ -115,12 +127,46 @@ func processStatsRequired(colNames []string) bool {
 	return false
 }
 
-// getColNames - Find out what the desired columns are specified in envvar CF_COLS, or use the default set of columns
-func getColNames() []string {
-	if os.Getenv("CF_COLS") == "" {
+// getRequestedColNames - Find out what the desired columns are specified in envvar CF_COLS, or use the default set of columns
+func getRequestedColNames() []string {
+	requestedColumns := os.Getenv("CF_COLS")
+	if requestedColumns == "" {
 		return DefaultColumns
 	}
-	return DefaultColumns // TODO, here handle the custom columns
+	customColNames := strings.Split(requestedColumns, ",")
+	//
+	// validate if invalid column names have been requested (if so, abort), and also check if instance level columns are present (if so, add Ix column)
+	for _, customColName := range customColNames {
+		isCustomColumnValid := false
+		isInstanceLevelColumnRequested := false
+		for _, validColumn := range ValidColumns {
+			if customColName == validColumn {
+				isCustomColumnValid = true
+			}
+		}
+		if !isCustomColumnValid {
+			fmt.Println(terminal.FailureColor(fmt.Sprintf("Invalid column in CF_COLS envvar : %s", customColName)))
+			os.Exit(1)
+		}
+		for _, instanceColumn := range InstanceLevelColumns {
+			if customColName == instanceColumn {
+				isInstanceLevelColumnRequested = true
+			}
+		}
+		if !isCustomColumnValid {
+			fmt.Println(terminal.FailureColor(fmt.Sprintf("Invalid column in CF_COLS envvar : %s", customColName)))
+			os.Exit(1)
+		}
+		if isInstanceLevelColumnRequested {
+			// prepend "ix,"
+			return strings.Split(fmt.Sprintf("%s,%s", colIx, requestedColumns), ",")
+		}
+	}
+
+	//
+	// check if we have instance level columns, if so, we add an extra "ix" column to indicate which app index we have
+
+	return customColNames
 }
 
 func getColValue(appGuid string, colName string) string {
@@ -136,7 +182,7 @@ func getColValue(appGuid string, colName string) string {
 			case colCpu:
 				column = fmt.Sprintf("%s%.3f\n", column, process.Usage.CPU)
 			case colMemUsed:
-				column = fmt.Sprintf("%s%v\n", column, process.Usage.Mem/1024/1024)
+				column = fmt.Sprintf("%s%7d\n", column, process.Usage.Mem/1024/1024)
 			}
 		}
 	} else {
@@ -144,27 +190,39 @@ func getColValue(appGuid string, colName string) string {
 		switch colName {
 		case colAppName:
 			return appData[appGuid].Name
+		case colGuid:
+			return appData[appGuid].GUID
 		case colState:
 			return appData[appGuid].State
 		case colMemory:
-			return fmt.Sprintf("%d", processData[appGuid].MemoryInMb)
+			return fmt.Sprintf("%6d", processData[appGuid].MemoryInMb)
 		case colDisk:
 			return fmt.Sprintf("%d", processData[appGuid].DiskInMb)
 		case colType:
 			return processData[appGuid].Type
 		case colInstances:
 			return fmt.Sprintf("%d", processData[appGuid].Instances)
+		case colCreated:
+			return appData[appGuid].CreatedAt.Format(time.RFC3339)
+		case colUpdated:
+			return appData[appGuid].UpdatedAt.Format(time.RFC3339)
+		case colBuildpacks:
+			return strings.Join(appData[appGuid].Lifecycle.Data.Buildpacks, ",")
+		case colHealthCheck:
+			return processData[appGuid].HealthCheck.Type
+		case colHealthCheckInvocationTimeout:
+			var invocTmoutStr = "-"
+			if invocTmout := processData[appGuid].HealthCheck.Data.InvocationTimeout; invocTmout != nil {
+				invocTmoutStr = fmt.Sprintf("%v", processData[appGuid].HealthCheck.Data.InvocationTimeout.(float64))
+			}
+			return invocTmoutStr
+		case colHealthCheckTimeout:
+			var tmoutStr = "-"
+			if tmout := processData[appGuid].HealthCheck.Data.Timeout; tmout != nil {
+				tmoutStr = fmt.Sprintf("%v", processData[appGuid].HealthCheck.Data.Timeout.(float64))
+			}
+			return tmoutStr
 		}
-
-		//var invocTmoutStr = "-"
-		//var tmoutStr = "-"
-		//if invocTmout := processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.InvocationTimeout; invocTmout != nil {
-		//	invocTmoutStr = fmt.Sprintf("%v", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.InvocationTimeout.(float64))
-		//}
-		//if tmout := processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.Timeout; tmout != nil {
-		//	tmoutStr = fmt.Sprintf("%v", processForAppGuid(&processesListResponse, app.GUID).HealthCheck.Data.Timeout.(float64))
-		//}
-
 	}
 	return strings.TrimRight(column, "\n")
 }
