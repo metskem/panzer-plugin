@@ -35,10 +35,11 @@ const colHealthCheckInvocationTimeout = "InvocTmout"
 const colHealthCheckTimeout = "Tmout"
 const colGuid = "Guid"
 const colProcState = "ProcState"
+const colUptime = "Uptime"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
 	if len(args) != 1 {
@@ -106,13 +107,13 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	}
 
 	//
-	// here we start building the table output
-	table := terminal.NewTable(colNames)
+	// here we start building the table output (after having sorted by appName)
 	sortedAppNames := make([]string, 0, len(appData))
 	for _, app := range appData {
 		sortedAppNames = append(sortedAppNames, strings.ToLower(app.Name))
 	}
 
+	table := terminal.NewTable(colNames)
 	for _, appName := range sortedAppNames {
 		var colValues []string
 		for _, colName := range colNames {
@@ -188,7 +189,7 @@ func getRequestedColNames() []string {
 func getColValue(appGuid string, colName string) string {
 	var column string
 	// per app instance columns
-	if colName == colIx || colName == colHost || colName == colCpu || colName == colMemUsed || colName == colProcState {
+	if isInstanceColumn(colName) {
 		for ix, process := range processStats[appGuid].Resources {
 			switch colName {
 			case colIx:
@@ -213,6 +214,8 @@ func getColValue(appGuid string, colName string) string {
 						}
 					}
 				}
+			case colUptime:
+				column = fmt.Sprintf("%s%9d\n", column, process.Uptime)
 			}
 		}
 	} else {
@@ -259,6 +262,15 @@ func getColValue(appGuid string, colName string) string {
 		}
 	}
 	return strings.TrimRight(column, "\n")
+}
+
+func isInstanceColumn(name string) bool {
+	for _, instanceColumn := range InstanceLevelColumns {
+		if name == instanceColumn || name == colIx {
+			return true
+		}
+	}
+	return false
 }
 
 func getAppProcessStats(appsListResponse AppsListResponse) map[string]ProcessStatsResponse {

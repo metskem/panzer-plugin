@@ -9,3 +9,4 @@ Install the plugins as usual with _cf install-plugin <plugin binary>_
 
 * more cols
 * CF_COLS=ALL option
+* pagination required?
