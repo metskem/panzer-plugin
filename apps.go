@@ -54,7 +54,6 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 	fmt.Printf("Getting apps for org %s / space %s as %s\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
-	// TODO handle multi-page responses
 	resp, err := httpClient.Do(&httpRequest)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
@@ -79,7 +78,6 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	// get the /v3/processes data next
 	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest = http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	// TODO handle multi-page responses
 	resp, err = httpClient.Do(&httpRequest)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
