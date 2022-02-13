@@ -36,10 +36,11 @@ const colHealthCheckTimeout = "Tmout"
 const colGuid = "Guid"
 const colProcState = "ProcState"
 const colUptime = "Uptime"
+const colInstancePorts = "InstancePorts"
 
-var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime}
+var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colUpdated, colHealthCheck, colGuid}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
 	if len(args) != 1 {
@@ -50,7 +51,7 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 
 	//
 	// get the /v3/apps data first
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?space_guids=%s", apiEndpoint, currentSpace.Guid))
+	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 	fmt.Printf("Getting apps for org %s / space %s as %s\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
 	// TODO handle multi-page responses
@@ -76,9 +77,8 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 
 	//
 	// get the /v3/processes data next
-	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?space_guids=%s", apiEndpoint, currentSpace.Guid))
+	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest = http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	fmt.Printf("Getting process info for org %s / space %s as %s\n\n", terminal.AdvisoryColor(currentOrg.Name), terminal.AdvisoryColor(currentSpace.Name), terminal.AdvisoryColor(currentUser))
 	// TODO handle multi-page responses
 	resp, err = httpClient.Do(&httpRequest)
 	if err != nil {
@@ -150,32 +150,33 @@ func getRequestedColNames() []string {
 	if requestedColumns == "" {
 		return DefaultColumns
 	}
+	if requestedColumns == "ALL" {
+		return ValidColumns
+	}
 	customColNames := strings.Split(requestedColumns, ",")
 	//
 	// validate if invalid column names have been requested (if so, abort), and also check if instance level columns are present (if so, add Ix column)
 	for _, customColName := range customColNames {
 		isCustomColumnValid := false
-		isInstanceLevelColumnRequested := false
 		for _, validColumn := range ValidColumns {
 			if customColName == validColumn {
 				isCustomColumnValid = true
 			}
 		}
 		if !isCustomColumnValid {
-			fmt.Println(terminal.FailureColor(fmt.Sprintf("Invalid column in CF_COLS envvar : %s", customColName)))
+			fmt.Println(terminal.FailureColor(fmt.Sprintf("Invalid column in CF_COLS envvar : %s.", customColName)))
+			fmt.Println(fmt.Sprintf("Valid column names are: %s", strings.Join(ValidColumns, ",")))
 			os.Exit(1)
 		}
+	}
+	for _, customColName := range customColNames {
+		isInstanceLevelColumnRequested := false
 		for _, instanceColumn := range InstanceLevelColumns {
 			if customColName == instanceColumn {
 				isInstanceLevelColumnRequested = true
 			}
 		}
-		if !isCustomColumnValid {
-			fmt.Println(terminal.FailureColor(fmt.Sprintf("Invalid column in CF_COLS envvar : %s", customColName)))
-			os.Exit(1)
-		}
 		if isInstanceLevelColumnRequested {
-			// prepend "ix,"
 			return strings.Split(fmt.Sprintf("%s,%s", colIx, requestedColumns), ",")
 		}
 	}
@@ -216,6 +217,12 @@ func getColValue(appGuid string, colName string) string {
 				}
 			case colUptime:
 				column = fmt.Sprintf("%s%9d\n", column, process.Uptime)
+			case colInstancePorts:
+				var instancePorts []string
+				for _, port := range process.InstancePorts {
+					instancePorts = append(instancePorts, fmt.Sprintf("%d", port.Internal))
+				}
+				column = fmt.Sprintf("%s%s\n", column, strings.Join(instancePorts, ","))
 			}
 		}
 	} else {
@@ -234,9 +241,9 @@ func getColValue(appGuid string, colName string) string {
 		case colMemory:
 			return fmt.Sprintf("%6d", processData[appGuid].MemoryInMb)
 		case colDisk:
-			return fmt.Sprintf("%d", processData[appGuid].DiskInMb)
+			return fmt.Sprintf("%6d", processData[appGuid].DiskInMb)
 		case colType:
-			return processData[appGuid].Type
+			return fmt.Sprintf("%4s", processData[appGuid].Type)
 		case colInstances:
 			return fmt.Sprintf("%5d", processData[appGuid].Instances)
 		case colCreated:
@@ -246,7 +253,7 @@ func getColValue(appGuid string, colName string) string {
 		case colBuildpacks:
 			return strings.Join(appData[appGuid].Lifecycle.Data.Buildpacks, ",")
 		case colHealthCheck:
-			return processData[appGuid].HealthCheck.Type
+			return fmt.Sprintf("%11s", processData[appGuid].HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:
 			var invocTmoutStr = "-"
 			if invocTmout := processData[appGuid].HealthCheck.Data.InvocationTimeout; invocTmout != nil {
