@@ -22,7 +22,7 @@ const colState = "State"
 const colMemory = "Memory"
 const colDisk = "Disk"
 const colType = "Type"
-const colInstances = "Instances"
+const colInstances = "#Inst"
 const colIx = "Ix"
 const colHost = "Host"
 const colCpu = "Cpu"
@@ -34,10 +34,11 @@ const colHealthCheck = "HealthCheck"
 const colHealthCheckInvocationTimeout = "InvocTmout"
 const colHealthCheckTimeout = "Tmout"
 const colGuid = "Guid"
+const colProcState = "ProcState"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
 	if len(args) != 1 {
@@ -48,9 +49,9 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 
 	//
 	// get the /v3/apps data first
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?order_by=name&space_guids=%s", apiEndpoint, currentSpace.Guid))
+	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	fmt.Printf("Getting apps for org %s / space %s as %s\n\n", terminal.AdvisoryColor(currentOrg.Name), terminal.AdvisoryColor(currentSpace.Name), terminal.AdvisoryColor(currentUser))
+	fmt.Printf("Getting apps for org %s / space %s as %s\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
 	// TODO handle multi-page responses
 	resp, err := httpClient.Do(&httpRequest)
 	if err != nil {
@@ -172,7 +173,7 @@ func getRequestedColNames() []string {
 func getColValue(appGuid string, colName string) string {
 	var column string
 	// per app instance columns
-	if colName == colIx || colName == colHost || colName == colCpu || colName == colMemUsed {
+	if colName == colIx || colName == colHost || colName == colCpu || colName == colMemUsed || colName == colProcState {
 		for ix, process := range processStats[appGuid].Resources {
 			switch colName {
 			case colIx:
@@ -183,17 +184,35 @@ func getColValue(appGuid string, colName string) string {
 				column = fmt.Sprintf("%s%.3f\n", column, process.Usage.CPU)
 			case colMemUsed:
 				column = fmt.Sprintf("%s%7d\n", column, process.Usage.Mem/1024/1024)
+			case colProcState:
+				if appData[appGuid].State == "STARTED" && process.State == "CRASHED" {
+					column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(process.State)))
+				} else {
+					if appData[appGuid].State == "STOPPED" && process.State == "DOWN" {
+						column = fmt.Sprintf("%s%s\n", column, terminal.StoppedColor(strings.ToLower(process.State)))
+					} else {
+						if appData[appGuid].State == "STARTED" && process.State == "STARTING" {
+							column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(process.State)))
+						} else {
+							column = fmt.Sprintf("%s%s\n", column, terminal.SuccessColor(strings.ToLower(process.State)))
+						}
+					}
+				}
 			}
 		}
 	} else {
-		// other columns (not per app instance)
+		// other columns (per app, not per app instance)
 		switch colName {
 		case colAppName:
 			return appData[appGuid].Name
 		case colGuid:
 			return appData[appGuid].GUID
 		case colState:
-			return appData[appGuid].State
+			if appData[appGuid].State == "STOPPED" {
+				return terminal.StoppedColor(strings.ToLower(appData[appGuid].State))
+			} else {
+				return terminal.SuccessColor(strings.ToLower(appData[appGuid].State))
+			}
 		case colMemory:
 			return fmt.Sprintf("%6d", processData[appGuid].MemoryInMb)
 		case colDisk:
@@ -201,7 +220,7 @@ func getColValue(appGuid string, colName string) string {
 		case colType:
 			return processData[appGuid].Type
 		case colInstances:
-			return fmt.Sprintf("%d", processData[appGuid].Instances)
+			return fmt.Sprintf("%5d", processData[appGuid].Instances)
 		case colCreated:
 			return appData[appGuid].CreatedAt.Format(time.RFC3339)
 		case colUpdated:

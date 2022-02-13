@@ -48,62 +48,62 @@ type AppsListResource struct {
 			Stack      string   `json:"stack"`
 		} `json:"data"`
 	} `json:"lifecycle"`
-	Relationships struct {
-		Space struct {
-			Data struct {
-				GUID string `json:"guid"`
-			} `json:"data"`
-		} `json:"space"`
-	} `json:"relationships"`
-	Metadata struct {
-		Labels struct {
-		} `json:"labels"`
-		Annotations struct {
-		} `json:"annotations"`
-	} `json:"metadata"`
-	Links struct {
-		Self struct {
-			Href string `json:"href"`
-		} `json:"self"`
-		EnvironmentVariables struct {
-			Href string `json:"href"`
-		} `json:"environment_variables"`
-		Space struct {
-			Href string `json:"href"`
-		} `json:"space"`
-		Processes struct {
-			Href string `json:"href"`
-		} `json:"processes"`
-		Packages struct {
-			Href string `json:"href"`
-		} `json:"packages"`
-		CurrentDroplet struct {
-			Href string `json:"href"`
-		} `json:"current_droplet"`
-		Droplets struct {
-			Href string `json:"href"`
-		} `json:"droplets"`
-		Tasks struct {
-			Href string `json:"href"`
-		} `json:"tasks"`
-		Start struct {
-			Href   string `json:"href"`
-			Method string `json:"method"`
-		} `json:"start"`
-		Stop struct {
-			Href   string `json:"href"`
-			Method string `json:"method"`
-		} `json:"stop"`
-		Revisions struct {
-			Href string `json:"href"`
-		} `json:"revisions"`
-		DeployedRevisions struct {
-			Href string `json:"href"`
-		} `json:"deployed_revisions"`
-		Features struct {
-			Href string `json:"href"`
-		} `json:"features"`
-	} `json:"links"`
+	//Relationships struct {
+	//	Space struct {
+	//		Data struct {
+	//			GUID string `json:"guid"`
+	//		} `json:"data"`
+	//	} `json:"space"`
+	//} `json:"relationships"`
+	//Metadata struct {
+	//	Labels struct {
+	//	} `json:"labels"`
+	//	Annotations struct {
+	//	} `json:"annotations"`
+	//} `json:"metadata"`
+	//Links struct {
+	//	Self struct {
+	//		Href string `json:"href"`
+	//	} `json:"self"`
+	//	EnvironmentVariables struct {
+	//		Href string `json:"href"`
+	//	} `json:"environment_variables"`
+	//	Space struct {
+	//		Href string `json:"href"`
+	//	} `json:"space"`
+	//	Processes struct {
+	//		Href string `json:"href"`
+	//	} `json:"processes"`
+	//	Packages struct {
+	//		Href string `json:"href"`
+	//	} `json:"packages"`
+	//	CurrentDroplet struct {
+	//		Href string `json:"href"`
+	//	} `json:"current_droplet"`
+	//	Droplets struct {
+	//		Href string `json:"href"`
+	//	} `json:"droplets"`
+	//	Tasks struct {
+	//		Href string `json:"href"`
+	//	} `json:"tasks"`
+	//	Start struct {
+	//		Href   string `json:"href"`
+	//		Method string `json:"method"`
+	//	} `json:"start"`
+	//	Stop struct {
+	//		Href   string `json:"href"`
+	//		Method string `json:"method"`
+	//	} `json:"stop"`
+	//	Revisions struct {
+	//		Href string `json:"href"`
+	//	} `json:"revisions"`
+	//	DeployedRevisions struct {
+	//		Href string `json:"href"`
+	//	} `json:"deployed_revisions"`
+	//	Features struct {
+	//		Href string `json:"href"`
+	//	} `json:"features"`
+	//} `json:"links"`
 }
 
 type ProcessesListResponse struct {
@@ -140,42 +140,42 @@ type Process struct {
 			InvocationTimeout interface{} `json:"invocation_timeout"`
 		} `json:"data"`
 	} `json:"health_check"`
-	Relationships struct {
-		App struct {
-			Data struct {
-				GUID string `json:"guid"`
-			} `json:"data"`
-		} `json:"app"`
-		Revision struct {
-			Data struct {
-				GUID string `json:"guid"`
-			} `json:"data"`
-		} `json:"revision"`
-	} `json:"relationships"`
-	Metadata struct {
-		Labels struct {
-		} `json:"labels"`
-		Annotations struct {
-		} `json:"annotations"`
-	} `json:"metadata"`
-	Links struct {
-		Self struct {
-			Href string `json:"href"`
-		} `json:"self"`
-		Scale struct {
-			Href   string `json:"href"`
-			Method string `json:"method"`
-		} `json:"scale"`
-		App struct {
-			Href string `json:"href"`
-		} `json:"app"`
-		Space struct {
-			Href string `json:"href"`
-		} `json:"space"`
-		Stats struct {
-			Href string `json:"href"`
-		} `json:"stats"`
-	} `json:"links"`
+	//Relationships struct {
+	//	App struct {
+	//		Data struct {
+	//			GUID string `json:"guid"`
+	//		} `json:"data"`
+	//	} `json:"app"`
+	//	Revision struct {
+	//		Data struct {
+	//			GUID string `json:"guid"`
+	//		} `json:"data"`
+	//	} `json:"revision"`
+	//} `json:"relationships"`
+	//Metadata struct {
+	//	Labels struct {
+	//	} `json:"labels"`
+	//	Annotations struct {
+	//	} `json:"annotations"`
+	//} `json:"metadata"`
+	//Links struct {
+	//	Self struct {
+	//		Href string `json:"href"`
+	//	} `json:"self"`
+	//	Scale struct {
+	//		Href   string `json:"href"`
+	//		Method string `json:"method"`
+	//	} `json:"scale"`
+	//	App struct {
+	//		Href string `json:"href"`
+	//	} `json:"app"`
+	//	Space struct {
+	//		Href string `json:"href"`
+	//	} `json:"space"`
+	//	Stats struct {
+	//		Href string `json:"href"`
+	//	} `json:"stats"`
+	//} `json:"links"`
 }
 
 type ProcessStatsResponse struct {
