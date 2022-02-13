@@ -108,14 +108,29 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	//
 	// here we start building the table output
 	table := terminal.NewTable(colNames)
+	sortedAppNames := make([]string, 0, len(appData))
 	for _, app := range appData {
+		sortedAppNames = append(sortedAppNames, strings.ToLower(app.Name))
+	}
+
+	for _, appName := range sortedAppNames {
 		var colValues []string
 		for _, colName := range colNames {
-			colValues = append(colValues, getColValue(app.GUID, colName))
+			colValues = append(colValues, getColValue(getAppByName(appName).GUID, colName))
 		}
 		table.Add(colValues[:]...)
 	}
 	_ = table.PrintTo(os.Stdout)
+}
+
+func getAppByName(name string) AppsListResource {
+	var app AppsListResource
+	for _, app = range appData {
+		if strings.ToLower(app.Name) == name {
+			return app
+		}
+	}
+	return app
 }
 
 // processStatsRequired - If we want at least one instance level column, we need the app process stats
