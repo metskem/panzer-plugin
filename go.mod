@@ -1,4 +1,4 @@
-module dev.azure.com/raboweb/panzer/_git/panzer-plugin
+module github/metskem/panzer-plugin
 
 go 1.16
 

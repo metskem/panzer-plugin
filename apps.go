@@ -45,7 +45,7 @@ var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, c
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
 	if len(args) != 1 {
-		fmt.Printf("Incorrect Usage: there should be no arguments to this command`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
+		fmt.Printf("Incorrect Usage: This command does not take arguments, use envvar CF_COLS`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
 		os.Exit(1)
 	}
 	colNames := getRequestedColNames()

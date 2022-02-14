@@ -15,8 +15,7 @@ import (
 const (
 	HttpTimeout = 5
 
-	ListAppsHelpText = "lists basic information of apps in current space"
-	ListAppsUsage    = "aa <more options to follow>"
+	ListAppsHelpText = "Lists basic information of apps in the current space"
 )
 
 var (
@@ -27,6 +26,7 @@ var (
 	requestHeader http.Header
 	httpClient    http.Client
 	apiEndpoint   string
+	ListAppsUsage = fmt.Sprintf("aa  - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
 )
 
 // Run must be implemented by any plugin because it is part of the plugin interface defined by the core CLI.
