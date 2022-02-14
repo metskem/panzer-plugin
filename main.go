@@ -40,11 +40,11 @@ var (
 //
 func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	httpClient = http.Client{Timeout: time.Duration(HttpTimeout) * time.Second}
-	precheck(cliConnection)
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
 
 	switch args[0] {
 	case "aa":
+		precheck(cliConnection)
 		listApps(cliConnection, args)
 	}
 }
@@ -56,8 +56,8 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 // The second field, HelpText, is used by the core CLI to display help information to the user in the core commands `cf help`, `cf`, or `cf -h`.
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
-		Name:          "Panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 0},
+		Name:          "panzer",
+		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 3},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},
