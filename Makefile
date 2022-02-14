@@ -1,24 +1,21 @@
 BINARY=panzer-plugin
 
-all: deps tests linux darwin windows
+all: deps linux darwin windows
 
 clean:
 	go clean
-	if [ -f ./target/linux_amd64/${BINARY} ] ; then rm ./target/linux_amd64/${BINARY} ; fi
-	if [ -f ./target/darwin_amd64/${BINARY} ] ; then rm ./target/darwin_amd64/${BINARY} ; fi
-	if [ -f ./target/windows_amd64/${BINARY} ] ; then rm ./target/windows_amd64/${BINARY} ; fi
+	if [ -f ./target/linux_amd64/${BINARY} ] ; then rm ./target/${BINARY}-linux_amd64 ; fi
+	if [ -f ./target/darwin_amd64/${BINARY} ] ; then rm ./target/${BINARY}-darwin_amd64 ; fi
+	if [ -f ./target/windows_amd64/${BINARY} ] ; then rm ./target/${BINARY}-windows_amd64 ; fi
 
 deps:
 	go get -v ./...
 
-tests: deps
-	go test ./...
+linux: deps
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-linux_amd64 .
 
-linux: tests
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/linux_amd64/${BINARY} .
+darwin: deps
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-darwin_amd64 .
 
-darwin: tests
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/darwin_amd64/${BINARY} .
-
-windows: tests
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/windows_amd64/${BINARY} .
+windows: deps
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-windows_amd64 .
