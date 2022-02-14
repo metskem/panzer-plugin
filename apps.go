@@ -73,6 +73,11 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 	}
+
+	if len(appsListResponse.Resources) == 0 {
+		fmt.Println("No apps found")
+		os.Exit(0)
+	}
 	// convert the json response to a map of AppsListResource keyed by appguid
 	for _, appsListResource := range appsListResponse.Resources {
 		appData[appsListResource.GUID] = appsListResource
