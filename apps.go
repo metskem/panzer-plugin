@@ -44,6 +44,9 @@ var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, c
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
+	httpClient = http.Client{Timeout: time.Duration(HttpTimeout) * time.Second}
+	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
+
 	if len(args) != 1 {
 		fmt.Printf("Incorrect Usage: This command does not take arguments, use envvar CF_COLS`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
 		os.Exit(1)

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 )
 
 const (
@@ -39,9 +38,6 @@ var (
 // The CLI will exit 0 if the plugin exits 0 and will exit 1 should the plugin exits nonzero.
 //
 func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
-	httpClient = http.Client{Timeout: time.Duration(HttpTimeout) * time.Second}
-	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
-
 	switch args[0] {
 	case "aa":
 		precheck(cliConnection)
