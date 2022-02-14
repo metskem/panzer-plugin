@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -110,6 +111,7 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	for _, app := range appData {
 		sortedAppNames = append(sortedAppNames, strings.ToLower(app.Name))
 	}
+	sort.Strings(sortedAppNames)
 
 	table := terminal.NewTable(colNames)
 	for _, appName := range sortedAppNames {
@@ -188,7 +190,7 @@ func getRequestedColNames() []string {
 func getColValue(appGuid string, colName string) string {
 	var column string
 	// per app instance columns
-	if isInstanceColumn(colName) {
+	if isInstanceColumn(colName) && appData[appGuid].State != "STOPPED" {
 		for ix, process := range processStats[appGuid].Resources {
 			switch colName {
 			case colIx:
@@ -281,24 +283,26 @@ func isInstanceColumn(name string) bool {
 func getAppProcessStats(appsListResponse AppsListResponse) map[string]ProcessStatsResponse {
 	processStats = make(map[string]ProcessStatsResponse)
 	for _, app := range appsListResponse.Resources {
-		requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/processes/%s/stats", apiEndpoint, app.GUID))
-		httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-		resp, err := httpClient.Do(&httpRequest)
-		if err != nil {
-			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
-			os.Exit(1)
+		if app.State != "STOPPED" {
+			requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/processes/%s/stats", apiEndpoint, app.GUID))
+			httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
+			resp, err := httpClient.Do(&httpRequest)
+			if err != nil {
+				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
+				os.Exit(1)
+			}
+			if err != nil {
+				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get app stats: %s", err)))
+				os.Exit(1)
+			}
+			body, _ := ioutil.ReadAll(resp.Body)
+			processesStatsResponse := ProcessStatsResponse{}
+			err = json.Unmarshal(body, &processesStatsResponse)
+			if err != nil {
+				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
+			}
+			processStats[app.GUID] = processesStatsResponse
 		}
-		if err != nil {
-			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get app stats: %s", err)))
-			os.Exit(1)
-		}
-		body, _ := ioutil.ReadAll(resp.Body)
-		processesStatsResponse := ProcessStatsResponse{}
-		err = json.Unmarshal(body, &processesStatsResponse)
-		if err != nil {
-			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-		}
-		processStats[app.GUID] = processesStatsResponse
 	}
 	return processStats
 }
