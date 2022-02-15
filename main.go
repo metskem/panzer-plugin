@@ -18,14 +18,15 @@ const (
 )
 
 var (
-	accessToken   string
-	currentOrg    plugin_models.Organization
-	currentSpace  plugin_models.Space
-	currentUser   string
-	requestHeader http.Header
-	httpClient    http.Client
-	apiEndpoint   string
-	ListAppsUsage = fmt.Sprintf("aa  - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
+	accessToken       string
+	currentOrg        plugin_models.Organization
+	currentSpace      plugin_models.Space
+	currentUser       string
+	requestHeader     http.Header
+	httpClient        http.Client
+	apiEndpoint       string
+	ListAppsUsage     = fmt.Sprintf("aa  - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
+	skipSSLValidation bool
 )
 
 // Run must be implemented by any plugin because it is part of the plugin interface defined by the core CLI.
@@ -90,6 +91,10 @@ func precheck(cliConnection plugin.CliConnection) {
 		os.Exit(1)
 	}
 	if apiEndpoint, err = cliConnection.ApiEndpoint(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	if skipSSLValidation, err = cliConnection.IsSSLDisabled(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -44,7 +45,8 @@ var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, c
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
 func listApps(cliConnection plugin.CliConnection, args []string) {
-	httpClient = http.Client{Timeout: time.Duration(HttpTimeout) * time.Second}
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSSLValidation}}
+	httpClient = http.Client{Transport: transport, Timeout: time.Duration(HttpTimeout) * time.Second}
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
 
 	if len(args) != 1 {
@@ -57,7 +59,7 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	// get the /v3/apps data first
 	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	fmt.Printf("Getting apps for org %s / space %s as %s\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
+	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
 	resp, err := httpClient.Do(&httpRequest)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
