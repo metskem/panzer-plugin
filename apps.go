@@ -208,7 +208,7 @@ func getColValue(appGuid string, colName string) string {
 			case colHost:
 				column = fmt.Sprintf("%s%s\n", column, process.Host)
 			case colCpu:
-				column = fmt.Sprintf("%s%.3f\n", column, process.Usage.CPU)
+				column = fmt.Sprintf("%s%5.1f%%\n", column, process.Usage.CPU*100)
 			case colMemUsed:
 				column = fmt.Sprintf("%s%7d\n", column, process.Usage.Mem/1024/1024)
 			case colProcState:
