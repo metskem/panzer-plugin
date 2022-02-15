@@ -8,7 +8,7 @@ The following column names are supported:
 
 **Name,State,Memory,Disk,Type,#Inst,Host,Cpu,MemUsed,Created,Updated,Buildpacks,HealthCheck,InvocTmout,Tmout,Guid,ProcState,Uptime,InstancePorts**   
 
-Mind that there application related columns and application instance (process) related columns.  
+Mind that there are application related columns and application instance (process) related columns.  
 From the above set of columns, the following are process-related: 
 
 **Host, Cpu, MemUsed, ProcState, Uptime, InstancePorts**.  
