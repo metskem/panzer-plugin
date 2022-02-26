@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -210,7 +211,17 @@ func getColValue(appGuid string, colName string) string {
 			case colCpu:
 				column = fmt.Sprintf("%s%5.1f%%\n", column, process.Usage.CPU*100)
 			case colMemUsed:
-				column = fmt.Sprintf("%s%7d\n", column, process.Usage.Mem/1024/1024)
+				// calculate and color the memory used percentage
+				usedMem := process.Usage.Mem / 1024 / 1024
+				memPercent := 100 * usedMem / processData[appGuid].MemoryInMb
+				memPercentColored := terminal.SuccessColor(strconv.Itoa(memPercent))
+				if memPercent < 25 {
+					memPercentColored = terminal.AdvisoryColor(strconv.Itoa(memPercent))
+				}
+				if memPercent > 90 {
+					memPercentColored = terminal.FailureColor(strconv.Itoa(memPercent))
+				}
+				column = fmt.Sprintf("%s%4d (%2s %%)\n", column, usedMem, memPercentColored)
 			case colProcState:
 				if appData[appGuid].State == "STARTED" && process.State == "CRASHED" {
 					column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(process.State)))
@@ -282,8 +293,11 @@ func getColValue(appGuid string, colName string) string {
 }
 
 func isInstanceColumn(name string) bool {
+	if name == colIx {
+		return true
+	}
 	for _, instanceColumn := range InstanceLevelColumns {
-		if name == instanceColumn || name == colIx {
+		if name == instanceColumn {
 			return true
 		}
 	}

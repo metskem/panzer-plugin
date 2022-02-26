@@ -18,7 +18,6 @@ require (
 	github.com/cloudfoundry/bosh-utils v0.0.295 // indirect
 	github.com/cppforlife/go-patch v0.2.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
-	github.com/fatih/color v1.13.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/lunixbochs/vtclean v1.0.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
