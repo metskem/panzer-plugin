@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	HttpTimeout = 5
+	HttpTimeout = 20
 
 	ListAppsHelpText = "Lists basic information of apps in the current space"
 )
@@ -25,7 +25,7 @@ var (
 	requestHeader     http.Header
 	httpClient        http.Client
 	apiEndpoint       string
-	ListAppsUsage     = fmt.Sprintf("aa  - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
+	ListAppsUsage     = fmt.Sprintf("aa [appname-prefix] - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
 	skipSSLValidation bool
 )
 
@@ -42,7 +42,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	switch args[0] {
 	case "aa":
 		precheck(cliConnection)
-		listApps(cliConnection, args)
+		listApps(args)
 	}
 }
 
@@ -54,7 +54,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 5},
+		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 6},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},

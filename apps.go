@@ -2,7 +2,6 @@ package main
 
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
-	"code.cloudfoundry.org/cli/plugin"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -28,7 +27,7 @@ const colType = "Type"
 const colInstances = "#Inst"
 const colIx = "Ix"
 const colHost = "Host"
-const colCpu = "Cpu"
+const colCpu = "Cpu%"
 const colMemUsed = "MemUsed"
 const colCreated = "Created"
 const colUpdated = "Updated"
@@ -45,16 +44,20 @@ var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType,
 var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
-func listApps(cliConnection plugin.CliConnection, args []string) {
+func listApps(args []string) {
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSSLValidation}}
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(HttpTimeout) * time.Second}
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
 
-	if len(args) != 1 {
-		fmt.Printf("Incorrect Usage: This command does not take arguments, use envvar CF_COLS`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
+	if len(args) < 1 || len(args) > 2 {
+		fmt.Printf("Usage: \"cf aa [appname-prefix]\". (Use envvar CF_COLS to specify the output columns)`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
 		os.Exit(1)
 	}
 	colNames := getRequestedColNames()
+	var appnamePrefix = ""
+	if len(args) == 2 {
+		appnamePrefix = args[1]
+	}
 
 	//
 	// get the /v3/apps data first
@@ -83,7 +86,9 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	}
 	// convert the json response to a map of AppsListResource keyed by appguid
 	for _, appsListResource := range appsListResponse.Resources {
-		appData[appsListResource.GUID] = appsListResource
+		if strings.HasPrefix(appsListResource.Name, appnamePrefix) {
+			appData[appsListResource.GUID] = appsListResource
+		}
 	}
 
 	//
@@ -113,7 +118,7 @@ func listApps(cliConnection plugin.CliConnection, args []string) {
 	//
 	// optionally get the stats (per app instance stats)
 	if processStatsRequired(colNames) {
-		processStats = getAppProcessStats(appsListResponse)
+		processStats = getAppProcessStats(appsListResponse, appnamePrefix)
 	}
 
 	//
@@ -209,25 +214,25 @@ func getColValue(appGuid string, colName string) string {
 			case colHost:
 				column = fmt.Sprintf("%s%s\n", column, process.Host)
 			case colCpu:
-				column = fmt.Sprintf("%s%5.1f%%\n", column, process.Usage.CPU*100)
+				column = fmt.Sprintf("%s%5.1f\n", column, process.Usage.CPU*100)
 			case colMemUsed:
 				// calculate and color the memory used percentage
 				usedMem := process.Usage.Mem / 1024 / 1024
 				memPercent := 100 * usedMem / processData[appGuid].MemoryInMb
-				memPercentColored := terminal.SuccessColor(strconv.Itoa(memPercent))
+				memPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 				if memPercent < 25 {
-					memPercentColored = terminal.AdvisoryColor(strconv.Itoa(memPercent))
+					memPercentColored = terminal.AdvisoryColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 				}
 				if memPercent > 90 {
-					memPercentColored = terminal.FailureColor(strconv.Itoa(memPercent))
+					memPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 				}
-				column = fmt.Sprintf("%s%4d (%2s %%)\n", column, usedMem, memPercentColored)
+				column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
 			case colProcState:
 				if appData[appGuid].State == "STARTED" && process.State == "CRASHED" {
 					column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(process.State)))
 				} else {
 					if appData[appGuid].State == "STOPPED" && process.State == "DOWN" {
-						column = fmt.Sprintf("%s%s\n", column, terminal.StoppedColor(strings.ToLower(process.State)))
+						column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(process.State)))
 					} else {
 						if appData[appGuid].State == "STARTED" && process.State == "STARTING" {
 							column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(process.State)))
@@ -304,10 +309,10 @@ func isInstanceColumn(name string) bool {
 	return false
 }
 
-func getAppProcessStats(appsListResponse AppsListResponse) map[string]ProcessStatsResponse {
+func getAppProcessStats(appsListResponse AppsListResponse, appnamePrefix string) map[string]ProcessStatsResponse {
 	processStats = make(map[string]ProcessStatsResponse)
 	for _, app := range appsListResponse.Resources {
-		if app.State != "STOPPED" {
+		if app.State != "STOPPED" && strings.HasPrefix(app.Name, appnamePrefix) {
 			requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/processes/%s/stats", apiEndpoint, app.GUID))
 			httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 			resp, err := httpClient.Do(&httpRequest)
