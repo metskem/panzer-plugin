@@ -45,14 +45,14 @@ var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, c
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
 func listApps(args []string) {
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSSLValidation}}
-	httpClient = http.Client{Transport: transport, Timeout: time.Duration(HttpTimeout) * time.Second}
-	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
-
 	if len(args) < 1 || len(args) > 2 {
 		fmt.Printf("Usage: \"cf aa [appname-prefix]\". (Use envvar CF_COLS to specify the output columns)`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
 		os.Exit(1)
 	}
+	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSSLValidation}}
+	httpClient = http.Client{Transport: transport, Timeout: time.Duration(DefaultHttpTimeout) * time.Second}
+	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
 	colNames := getRequestedColNames()
 	var appnamePrefix = ""
 	if len(args) == 2 {
@@ -63,7 +63,6 @@ func listApps(args []string) {
 	// get the /v3/apps data first
 	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
 	resp, err := httpClient.Do(&httpRequest)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
@@ -152,12 +151,15 @@ func getAppByName(name string) AppsListResource {
 
 // processStatsRequired - If we want at least one instance level column, we need the app process stats
 func processStatsRequired(colNames []string) bool {
+	var isProcessColumn bool = false
 	for _, colName := range colNames {
-		if colName == colMemUsed || colName == colCpu || colName == colHost {
-			return true
+		for _, processColumn := range InstanceLevelColumns {
+			if colName == processColumn {
+				isProcessColumn = true
+			}
 		}
 	}
-	return false
+	return isProcessColumn
 }
 
 // getRequestedColNames - Find out what the desired columns are specified in envvar CF_COLS, or use the default set of columns
@@ -228,7 +230,7 @@ func getColValue(appGuid string, colName string) string {
 				}
 				column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
 			case colProcState:
-				if appData[appGuid].State == "STARTED" && process.State == "CRASHED" {
+				if appData[appGuid].State == "STARTED" && (process.State == "CRASHED" || process.State == "DOWN") {
 					column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(process.State)))
 				} else {
 					if appData[appGuid].State == "STOPPED" && process.State == "DOWN" {

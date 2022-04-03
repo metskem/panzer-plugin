@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	HttpTimeout = 20
+	DefaultHttpTimeout = 60
 
 	ListAppsHelpText = "Lists basic information of apps in the current space"
 )
