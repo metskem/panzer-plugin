@@ -244,7 +244,7 @@ func getColValue(appGuid string, colName string) string {
 					}
 				}
 			case colUptime:
-				column = fmt.Sprintf("%s%9d\n", column, process.Uptime)
+				column = fmt.Sprintf("%s%12s\n", column, getFormattedElapsedTime(process.Uptime))
 			case colInstancePorts:
 				var instancePorts []string
 				for _, port := range process.InstancePorts {
@@ -336,4 +336,23 @@ func getAppProcessStats(appsListResponse AppsListResponse, appnamePrefix string)
 		}
 	}
 	return processStats
+}
+
+func getFormattedElapsedTime(timeInSecs int) string {
+	days := timeInSecs / 86400
+	secsLeft := timeInSecs % 86400
+	hours := secsLeft / 3600
+	secsLeft = secsLeft % 3600
+	mins := secsLeft / 60
+	secs := secsLeft % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd%02dh%02dm%02ds", days, hours, mins, secs)
+	} else if hours > 0 {
+		return fmt.Sprintf("%dh%02dm%02ds", hours, mins, secs)
+	} else if mins > 0 {
+		return fmt.Sprintf("%dm%02ds", mins, secs)
+	} else {
+		return fmt.Sprintf("%ds", secs)
+	}
+
 }
