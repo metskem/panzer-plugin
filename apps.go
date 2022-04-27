@@ -9,15 +9,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
 var appData = make(map[string]AppsListResource)
-var processData = make(map[string]Process)
+var processListResponse = ProcessesListResponse{}
 var processStats = make(map[string]ProcessStatsResponse)
+var appnamePrefix = ""
 
 const colAppName = "Name"
 const colState = "State"
@@ -54,7 +54,6 @@ func listApps(args []string) {
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(DefaultHttpTimeout) * time.Second}
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
 	colNames := getRequestedColNames()
-	var appnamePrefix = ""
 	if len(args) == 2 {
 		appnamePrefix = args[1]
 	}
@@ -104,49 +103,29 @@ func listApps(args []string) {
 		os.Exit(1)
 	}
 	body, _ = ioutil.ReadAll(resp.Body)
-	processListResponse := ProcessesListResponse{}
+	processListResponse = ProcessesListResponse{}
 	err = json.Unmarshal(body, &processListResponse)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 	}
-	// convert the json response to a map of Process keyed by appguid
-	for _, process := range processListResponse.Resources {
-		processData[process.GUID] = process
-	}
 
 	//
-	// optionally get the stats (per app instance stats)
+	// optionally get the stats (per instance stats)
 	if processStatsRequired(colNames) {
-		processStats = getAppProcessStats(appsListResponse, appnamePrefix)
+		processStats = getProcessStats(processListResponse)
 	}
-
-	//
-	// here we start building the table output (after having sorted by appName)
-	sortedAppNames := make([]string, 0, len(appData))
-	for _, app := range appData {
-		sortedAppNames = append(sortedAppNames, strings.ToLower(app.Name))
-	}
-	sort.Strings(sortedAppNames)
 
 	table := terminal.NewTable(colNames)
-	for _, appName := range sortedAppNames {
-		var colValues []string
-		for _, colName := range colNames {
-			colValues = append(colValues, getColValue(getAppByName(appName).GUID, colName))
+	for _, process := range processListResponse.Resources {
+		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+			var colValues []string
+			for _, colName := range colNames {
+				colValues = append(colValues, getColValue(process, colName))
+			}
+			table.Add(colValues[:]...)
 		}
-		table.Add(colValues[:]...)
 	}
 	_ = table.PrintTo(os.Stdout)
-}
-
-func getAppByName(name string) AppsListResource {
-	var app AppsListResource
-	for _, app = range appData {
-		if strings.ToLower(app.Name) == name {
-			return app
-		}
-	}
-	return app
 }
 
 // processStatsRequired - If we want at least one instance level column, we need the app process stats
@@ -194,104 +173,104 @@ func getRequestedColNames() []string {
 				isInstanceLevelColumnRequested = true
 			}
 		}
+		//
+		// check if we have instance level columns, if so, we add an extra "ix" column to indicate which app index we have
 		if isInstanceLevelColumnRequested {
 			return strings.Split(fmt.Sprintf("%s,%s", colIx, requestedColumns), ",")
 		}
 	}
-
-	//
-	// check if we have instance level columns, if so, we add an extra "ix" column to indicate which app index we have
-
 	return customColNames
 }
 
-func getColValue(appGuid string, colName string) string {
+func getColValue(process Process, colName string) string {
 	var column string
 	// per app instance columns
-	if isInstanceColumn(colName) && appData[appGuid].State != "STOPPED" {
-		for ix, process := range processStats[appGuid].Resources {
-			switch colName {
-			case colIx:
-				column = fmt.Sprintf("%s%d\n", column, ix)
-			case colHost:
-				column = fmt.Sprintf("%s%s\n", column, process.Host)
-			case colCpu:
-				column = fmt.Sprintf("%s%5.1f\n", column, process.Usage.CPU*100)
-			case colMemUsed:
-				// calculate and color the memory used percentage
-				usedMem := process.Usage.Mem / 1024 / 1024
-				memPercent := 100 * usedMem / processData[appGuid].MemoryInMb
-				memPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
-				if memPercent < 25 {
-					memPercentColored = terminal.AdvisoryColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
-				}
-				if memPercent > 90 {
-					memPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
-				}
-				column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
-			case colProcState:
-				if appData[appGuid].State == "STARTED" && (process.State == "CRASHED" || process.State == "DOWN") {
-					column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(process.State)))
-				} else {
-					if appData[appGuid].State == "STOPPED" && process.State == "DOWN" {
-						column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(process.State)))
+	if isInstanceColumn(colName) {
+		for statsIndex, stats := range processStats[process.GUID].Resources {
+			if appData[process.Relationships.App.Data.GUID].State != "STOPPED" {
+				switch colName {
+				case colIx:
+					column = fmt.Sprintf("%s%d\n", column, statsIndex)
+				case colHost:
+					column = fmt.Sprintf("%s%s\n", column, stats.Host)
+				case colCpu:
+					column = fmt.Sprintf("%s%5.1f\n", column, stats.Usage.CPU*100)
+				case colMemUsed:
+					// calculate and color the memory used percentage
+					usedMem := stats.Usage.Mem / 1024 / 1024
+					memPercent := 100 * usedMem / process.MemoryInMb
+					memPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
+					if memPercent < 25 {
+						memPercentColored = terminal.AdvisoryColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
+					}
+					if memPercent > 90 {
+						memPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
+					}
+					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
+				case colProcState:
+					if appData[process.Relationships.App.Data.GUID].State == "STARTED" && (stats.State == "CRASHED" || stats.State == "DOWN") {
+						column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(stats.State)))
 					} else {
-						if appData[appGuid].State == "STARTED" && process.State == "STARTING" {
-							column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(process.State)))
+						if appData[process.Relationships.App.Data.GUID].State == "STOPPED" && stats.State == "DOWN" {
+							column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(stats.State)))
 						} else {
-							column = fmt.Sprintf("%s%s\n", column, terminal.SuccessColor(strings.ToLower(process.State)))
+							if appData[process.Relationships.App.Data.GUID].State == "STARTED" && stats.State == "STARTING" {
+								column = fmt.Sprintf("%s%s\n", column, terminal.EntityNameColor(strings.ToLower(stats.State)))
+							} else {
+								column = fmt.Sprintf("%s%s\n", column, terminal.SuccessColor(strings.ToLower(stats.State)))
+							}
 						}
 					}
+				case colUptime:
+					column = fmt.Sprintf("%s%12s\n", column, getFormattedElapsedTime(stats.Uptime))
+				case colInstancePorts:
+					var instancePorts []string
+					for _, port := range stats.InstancePorts {
+						instancePorts = append(instancePorts, fmt.Sprintf("%d", port.Internal))
+					}
+					column = fmt.Sprintf("%s%s\n", column, strings.Join(instancePorts, ","))
 				}
-			case colUptime:
-				column = fmt.Sprintf("%s%12s\n", column, getFormattedElapsedTime(process.Uptime))
-			case colInstancePorts:
-				var instancePorts []string
-				for _, port := range process.InstancePorts {
-					instancePorts = append(instancePorts, fmt.Sprintf("%d", port.Internal))
-				}
-				column = fmt.Sprintf("%s%s\n", column, strings.Join(instancePorts, ","))
 			}
 		}
 	} else {
 		// other columns (per app, not per app instance)
 		switch colName {
 		case colAppName:
-			return appData[appGuid].Name
+			return appData[process.Relationships.App.Data.GUID].Name
 		case colGuid:
-			return appData[appGuid].GUID
+			return appData[process.Relationships.App.Data.GUID].GUID
 		case colState:
-			if appData[appGuid].State == "STOPPED" {
-				return terminal.StoppedColor(strings.ToLower(appData[appGuid].State))
+			if appData[process.Relationships.App.Data.GUID].State == "STOPPED" {
+				return terminal.StoppedColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
 			} else {
-				return terminal.SuccessColor(strings.ToLower(appData[appGuid].State))
+				return terminal.SuccessColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
 			}
 		case colMemory:
-			return fmt.Sprintf("%6d", processData[appGuid].MemoryInMb)
+			return fmt.Sprintf("%6d", process.MemoryInMb)
 		case colDisk:
-			return fmt.Sprintf("%6d", processData[appGuid].DiskInMb)
+			return fmt.Sprintf("%6d", process.DiskInMb)
 		case colType:
-			return fmt.Sprintf("%4s", processData[appGuid].Type)
+			return fmt.Sprintf("%4s", process.Type)
 		case colInstances:
-			return fmt.Sprintf("%5d", processData[appGuid].Instances)
+			return fmt.Sprintf("%5d", process.Instances)
 		case colCreated:
-			return appData[appGuid].CreatedAt.Format(time.RFC3339)
+			return appData[process.Relationships.App.Data.GUID].CreatedAt.Format(time.RFC3339)
 		case colUpdated:
-			return appData[appGuid].UpdatedAt.Format(time.RFC3339)
+			return appData[process.Relationships.App.Data.GUID].UpdatedAt.Format(time.RFC3339)
 		case colBuildpacks:
-			return strings.Join(appData[appGuid].Lifecycle.Data.Buildpacks, ",")
+			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.Data.Buildpacks, ",")
 		case colHealthCheck:
-			return fmt.Sprintf("%11s", processData[appGuid].HealthCheck.Type)
+			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:
 			var invocTmoutStr = "-"
-			if invocTmout := processData[appGuid].HealthCheck.Data.InvocationTimeout; invocTmout != nil {
-				invocTmoutStr = fmt.Sprintf("%v", processData[appGuid].HealthCheck.Data.InvocationTimeout.(float64))
+			if invocTmout := process.HealthCheck.Data.InvocationTimeout; invocTmout != nil {
+				invocTmoutStr = fmt.Sprintf("%v", process.HealthCheck.Data.InvocationTimeout.(float64))
 			}
 			return invocTmoutStr
 		case colHealthCheckTimeout:
 			var tmoutStr = "-"
-			if tmout := processData[appGuid].HealthCheck.Data.Timeout; tmout != nil {
-				tmoutStr = fmt.Sprintf("%v", processData[appGuid].HealthCheck.Data.Timeout.(float64))
+			if tmout := process.HealthCheck.Data.Timeout; tmout != nil {
+				tmoutStr = fmt.Sprintf("%v", process.HealthCheck.Data.Timeout.(float64))
 			}
 			return tmoutStr
 		}
@@ -311,11 +290,11 @@ func isInstanceColumn(name string) bool {
 	return false
 }
 
-func getAppProcessStats(appsListResponse AppsListResponse, appnamePrefix string) map[string]ProcessStatsResponse {
+func getProcessStats(processListResponse ProcessesListResponse) map[string]ProcessStatsResponse {
 	processStats = make(map[string]ProcessStatsResponse)
-	for _, app := range appsListResponse.Resources {
-		if app.State != "STOPPED" && strings.HasPrefix(app.Name, appnamePrefix) {
-			requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/processes/%s/stats", apiEndpoint, app.GUID))
+	for _, process := range processListResponse.Resources {
+		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+			requestUrl, _ := url.Parse(process.Links.Stats.Href)
 			httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 			resp, err := httpClient.Do(&httpRequest)
 			if err != nil {
@@ -332,7 +311,7 @@ func getAppProcessStats(appsListResponse AppsListResponse, appnamePrefix string)
 			if err != nil {
 				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 			}
-			processStats[app.GUID] = processesStatsResponse
+			processStats[process.GUID] = processesStatsResponse
 		}
 	}
 	return processStats
@@ -354,5 +333,4 @@ func getFormattedElapsedTime(timeInSecs int) string {
 	} else {
 		return fmt.Sprintf("%ds", secs)
 	}
-
 }

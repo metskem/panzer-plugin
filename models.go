@@ -128,42 +128,42 @@ type Process struct {
 			InvocationTimeout interface{} `json:"invocation_timeout"`
 		} `json:"data"`
 	} `json:"health_check"`
-	//Relationships struct {
-	//	App struct {
-	//		Data struct {
-	//			GUID string `json:"guid"`
-	//		} `json:"data"`
-	//	} `json:"app"`
-	//	Revision struct {
-	//		Data struct {
-	//			GUID string `json:"guid"`
-	//		} `json:"data"`
-	//	} `json:"revision"`
-	//} `json:"relationships"`
+	Relationships struct {
+		App struct {
+			Data struct {
+				GUID string `json:"guid"`
+			} `json:"data"`
+		} `json:"app"`
+		//	Revision struct {
+		//		Data struct {
+		//			GUID string `json:"guid"`
+		//		} `json:"data"`
+		//	} `json:"revision"`
+	} `json:"relationships"`
 	//Metadata struct {
 	//	Labels struct {
 	//	} `json:"labels"`
 	//	Annotations struct {
 	//	} `json:"annotations"`
 	//} `json:"metadata"`
-	//Links struct {
-	//	Self struct {
-	//		Href string `json:"href"`
-	//	} `json:"self"`
-	//	Scale struct {
-	//		Href   string `json:"href"`
-	//		Method string `json:"method"`
-	//	} `json:"scale"`
-	//	App struct {
-	//		Href string `json:"href"`
-	//	} `json:"app"`
-	//	Space struct {
-	//		Href string `json:"href"`
-	//	} `json:"space"`
-	//	Stats struct {
-	//		Href string `json:"href"`
-	//	} `json:"stats"`
-	//} `json:"links"`
+	Links struct {
+		//	Self struct {
+		//		Href string `json:"href"`
+		//	} `json:"self"`
+		//	Scale struct {
+		//		Href   string `json:"href"`
+		//		Method string `json:"method"`
+		//	} `json:"scale"`
+		//	App struct {
+		//		Href string `json:"href"`
+		//	} `json:"app"`
+		//	Space struct {
+		//		Href string `json:"href"`
+		//	} `json:"space"`
+		Stats struct {
+			Href string `json:"href"`
+		} `json:"stats"`
+	} `json:"links"`
 }
 
 type ProcessStatsResponse struct {
