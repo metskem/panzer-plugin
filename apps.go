@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,20 @@ var appData = make(map[string]AppsListResource)
 var processListResponse = ProcessesListResponse{}
 var processStats = make(map[string]ProcessStatsResponse)
 var appnamePrefix = ""
+
+type processList []Process
+
+func (list processList) Len() int {
+	return len(list)
+}
+
+func (list processList) Less(i, j int) bool {
+	return strings.ToLower(appData[list[i].Relationships.App.Data.GUID].Name) < strings.ToLower(appData[list[j].Relationships.App.Data.GUID].Name)
+}
+
+func (list processList) Swap(i, j int) {
+	list[i], list[j] = list[j], list[i]
+}
 
 const colAppName = "Name"
 const colState = "State"
@@ -108,7 +123,9 @@ func listApps(args []string) {
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 	}
-
+	var pList processList
+	pList = processListResponse.Resources
+	sort.Sort(pList)
 	//
 	// optionally get the stats (per instance stats)
 	if processStatsRequired(colNames) {
