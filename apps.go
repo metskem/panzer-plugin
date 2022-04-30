@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,6 +21,9 @@ var appData = make(map[string]AppsListResource)
 var processListResponse = ProcessesListResponse{}
 var processStats = make(map[string]ProcessStatsResponse)
 var appnamePrefix = ""
+var processMutex sync.Mutex
+var concurrencyCounter int32
+var concurrencyCounterP *int32
 
 type processList []Process
 
@@ -55,10 +60,11 @@ const colProcState = "ProcState"
 const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
-var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colUpdated, colHealthCheck, colGuid}
+var DefaultColumns = []string{colAppName, colType, colState, colMemory, colDisk, colInstances, colUpdated, colHealthCheck, colHost, colProcState, colUptime, colCpu, colMemUsed}
 var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
+/** listApps - The main function to produce the response. */
 func listApps(args []string) {
 	if len(args) < 1 || len(args) > 2 {
 		fmt.Printf("Usage: \"cf aa [appname-prefix]\". (Use envvar CF_COLS to specify the output columns)`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
@@ -134,18 +140,20 @@ func listApps(args []string) {
 
 	table := terminal.NewTable(colNames)
 	for _, process := range processListResponse.Resources {
-		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
-			var colValues []string
-			for _, colName := range colNames {
-				colValues = append(colValues, getColValue(process, colName))
+		if !(process.Type == "task" && process.Instances == 0) {
+			if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+				var colValues []string
+				for _, colName := range colNames {
+					colValues = append(colValues, getColValue(process, colName))
+				}
+				table.Add(colValues[:]...)
 			}
-			table.Add(colValues[:]...)
 		}
 	}
 	_ = table.PrintTo(os.Stdout)
 }
 
-// processStatsRequired - If we want at least one instance level column, we need the app process stats
+/** processStatsRequired - If we want at least one instance level column, we need the app process stats (and we have to make a lot more http calls if the space has a lot of apps) */
 func processStatsRequired(colNames []string) bool {
 	var isProcessColumn bool = false
 	for _, colName := range colNames {
@@ -158,7 +166,7 @@ func processStatsRequired(colNames []string) bool {
 	return isProcessColumn
 }
 
-// getRequestedColNames - Find out what the desired columns are specified in envvar CF_COLS, or use the default set of columns
+/** getRequestedColNames - Find out what the desired columns are specified in the envvar CF_COLS, or use the default set of columns */
 func getRequestedColNames() []string {
 	requestedColumns := os.Getenv("CF_COLS")
 	if requestedColumns == "" {
@@ -199,6 +207,7 @@ func getRequestedColNames() []string {
 	return customColNames
 }
 
+/** - getColValue - Get the value of the given column.*/
 func getColValue(process Process, colName string) string {
 	var column string
 	// per app instance columns
@@ -295,6 +304,7 @@ func getColValue(process Process, colName string) string {
 	return strings.TrimRight(column, "\n")
 }
 
+/** isInstanceColumn - Return true if the given column name is an instance column (and requires us to call the /stats for all processes) */
 func isInstanceColumn(name string) bool {
 	if name == colIx {
 		return true
@@ -307,33 +317,53 @@ func isInstanceColumn(name string) bool {
 	return false
 }
 
+/** getProcessStats - Iterate over all processes and get the stats from them (concurrently) */
 func getProcessStats(processListResponse ProcessesListResponse) map[string]ProcessStatsResponse {
 	processStats = make(map[string]ProcessStatsResponse)
+	concurrencyCounterP = &concurrencyCounter
 	for _, process := range processListResponse.Resources {
 		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
-			requestUrl, _ := url.Parse(process.Links.Stats.Href)
-			httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-			resp, err := httpClient.Do(&httpRequest)
-			if err != nil {
-				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
-				os.Exit(1)
+			if !(process.Type == "task" && process.Instances == 0) {
+				atomic.AddInt32(concurrencyCounterP, 1)
+				// throttle a bit:
+				time.Sleep(time.Millisecond * 10 * time.Duration(concurrencyCounter))
+				go getProcessStat(process)
 			}
-			if err != nil {
-				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get app stats: %s", err)))
-				os.Exit(1)
-			}
-			body, _ := ioutil.ReadAll(resp.Body)
-			processesStatsResponse := ProcessStatsResponse{}
-			err = json.Unmarshal(body, &processesStatsResponse)
-			if err != nil {
-				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-			}
-			processStats[process.GUID] = processesStatsResponse
+		}
+	}
+
+	// wait for all routines to end:
+	for {
+		time.Sleep(time.Millisecond * 100)
+		if concurrencyCounter == 0 {
+			break
 		}
 	}
 	return processStats
 }
 
+/** getProcessStat - Perform an http request to get the stats. This function is called concurrently. */
+func getProcessStat(process Process) {
+	defer atomic.AddInt32(concurrencyCounterP, -1)
+	requestUrl, _ := url.Parse(process.Links.Stats.Href)
+	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
+	resp, err := httpClient.Do(&httpRequest)
+	if err != nil {
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
+		os.Exit(1)
+	}
+	body, _ := ioutil.ReadAll(resp.Body)
+	processesStatsResponse := ProcessStatsResponse{}
+	err = json.Unmarshal(body, &processesStatsResponse)
+	if err != nil {
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
+	}
+	processMutex.Lock()
+	processStats[process.GUID] = processesStatsResponse
+	processMutex.Unlock()
+}
+
+/** getFormattedElapsedTime - Transform the input (time in seconds) to a string with number of days, hours, mins and secs, like "1d01h54m10s" */
 func getFormattedElapsedTime(timeInSecs int) string {
 	days := timeInSecs / 86400
 	secsLeft := timeInSecs % 86400
