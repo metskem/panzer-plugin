@@ -60,7 +60,7 @@ const colProcState = "ProcState"
 const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
-var DefaultColumns = []string{colAppName, colType, colState, colMemory, colDisk, colInstances, colUpdated, colHealthCheck, colHost, colProcState, colUptime, colCpu, colMemUsed}
+var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
 var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
 
@@ -151,6 +151,37 @@ func listApps(args []string) {
 		}
 	}
 	_ = table.PrintTo(os.Stdout)
+
+	fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals()))
+}
+
+/** getTotals - Get all totals for the apps in the space, like total # of apps and total memory usage. */
+func getTotals() string {
+	var totalApps = 0
+	var totalAppsStarted = 0
+	var totalInstances = 0
+	var totalMemory = 0
+	var totalDisk = 0
+	var totalMemoryUsed = 0
+	var totalDiskUsed = 0
+	var totalCpuUsed float64
+	for _, process := range processListResponse.Resources {
+		if !(process.Type == "task" && process.Instances == 0) {
+			totalApps++
+			if appData[process.GUID].State == "STARTED" {
+				totalInstances = totalInstances + process.Instances
+				totalAppsStarted++
+				totalMemory = totalMemory + process.MemoryInMb*process.Instances
+				totalDisk = totalDisk + process.DiskInMb*process.Instances
+				for _, stat := range processStats[process.GUID].Resources {
+					totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
+					totalMemoryUsed = totalMemoryUsed + stat.Usage.Mem/1024/1024
+					totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
+				}
+			}
+		}
+	}
+	return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, 100*totalMemoryUsed/totalMemory, totalCpuUsed, totalDisk, totalDiskUsed, 100*totalDiskUsed/totalDisk)
 }
 
 /** processStatsRequired - If we want at least one instance level column, we need the app process stats (and we have to make a lot more http calls if the space has a lot of apps) */
@@ -326,7 +357,7 @@ func getProcessStats(processListResponse ProcessesListResponse) map[string]Proce
 			if !(process.Type == "task" && process.Instances == 0) {
 				atomic.AddInt32(concurrencyCounterP, 1)
 				// throttle a bit:
-				time.Sleep(time.Millisecond * 10 * time.Duration(concurrencyCounter))
+				time.Sleep(time.Millisecond * 50 * time.Duration(concurrencyCounter))
 				go getProcessStat(process)
 			}
 		}

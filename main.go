@@ -54,7 +54,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 8},
+		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 9},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},
