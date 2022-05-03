@@ -1,11 +1,12 @@
 BINARY=panzer-plugin
 
-all: deps linux darwin windows
+all: deps linux darwin-amd64 darwin-arm64 windows
 
 clean:
 	go clean
 	if [ -f ./target/linux_amd64/${BINARY} ] ; then rm ./target/${BINARY}-linux_amd64 ; fi
 	if [ -f ./target/darwin_amd64/${BINARY} ] ; then rm ./target/${BINARY}-darwin_amd64 ; fi
+	if [ -f ./target/darwin_arm64/${BINARY} ] ; then rm ./target/${BINARY}-darwin_arm64 ; fi
 	if [ -f ./target/windows_amd64/${BINARY} ] ; then rm ./target/${BINARY}-windows_amd64 ; fi
 
 deps:
@@ -14,7 +15,7 @@ deps:
 linux: deps
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-linux_amd64 .
 
-darwin: deps
+darwin-amd64: deps
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-darwin_amd64 .
 
 darwin-arm64: deps
