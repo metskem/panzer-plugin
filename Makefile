@@ -17,5 +17,8 @@ linux: deps
 darwin: deps
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-darwin_amd64 .
 
+darwin-arm64: deps
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ./target/${BINARY}-darwin_arm64 .
+
 windows: deps
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ./target/${BINARY}-windows_amd64 .
