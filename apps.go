@@ -166,22 +166,28 @@ func getTotals() string {
 	var totalDiskUsed = 0
 	var totalCpuUsed float64
 	for _, process := range processListResponse.Resources {
-		if !(process.Type == "task" && process.Instances == 0) {
-			totalApps++
-			if appData[process.GUID].State == "STARTED" {
-				totalInstances = totalInstances + process.Instances
-				totalAppsStarted++
-				totalMemory = totalMemory + process.MemoryInMb*process.Instances
-				totalDisk = totalDisk + process.DiskInMb*process.Instances
-				for _, stat := range processStats[process.GUID].Resources {
-					totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
-					totalMemoryUsed = totalMemoryUsed + stat.Usage.Mem/1024/1024
-					totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
+		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+			if !(process.Type == "task" && process.Instances == 0) {
+				totalApps++
+				if appData[process.Relationships.App.Data.GUID].State == "STARTED" {
+					totalInstances = totalInstances + process.Instances
+					totalAppsStarted++
+					totalMemory = totalMemory + process.MemoryInMb*process.Instances
+					totalDisk = totalDisk + process.DiskInMb*process.Instances
+					for _, stat := range processStats[process.GUID].Resources {
+						totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
+						totalMemoryUsed = totalMemoryUsed + stat.Usage.Mem/1024/1024
+						totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
+					}
 				}
 			}
 		}
 	}
-	return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, 100*totalMemoryUsed/totalMemory, totalCpuUsed, totalDisk, totalDiskUsed, 100*totalDiskUsed/totalDisk)
+	if totalApps > 0 {
+		return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, 100*totalMemoryUsed/totalMemory, totalCpuUsed, totalDisk, totalDiskUsed, 100*totalDiskUsed/totalDisk)
+	} else {
+		return ""
+	}
 }
 
 /** processStatsRequired - If we want at least one instance level column, we need the app process stats (and we have to make a lot more http calls if the space has a lot of apps) */
@@ -357,7 +363,7 @@ func getProcessStats(processListResponse ProcessesListResponse) map[string]Proce
 			if !(process.Type == "task" && process.Instances == 0) {
 				atomic.AddInt32(concurrencyCounterP, 1)
 				// throttle a bit:
-				time.Sleep(time.Millisecond * 50 * time.Duration(concurrencyCounter))
+				time.Sleep(time.Millisecond * 25 * time.Duration(concurrencyCounter))
 				go getProcessStat(process)
 			}
 		}
