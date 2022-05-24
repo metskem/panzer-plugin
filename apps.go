@@ -184,7 +184,15 @@ func getTotals() string {
 		}
 	}
 	if totalApps > 0 {
-		return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, 100*totalMemoryUsed/totalMemory, totalCpuUsed, totalDisk, totalDiskUsed, 100*totalDiskUsed/totalDisk)
+		memPerc := 0
+		if totalMemory != 0 {
+			memPerc = 100 * totalMemoryUsed / totalMemory
+		}
+		diskPerc := 0
+		if totalDisk != 0 {
+			diskPerc = 100 * totalDiskUsed / totalDisk
+		}
+		return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, memPerc, totalCpuUsed, totalDisk, totalDiskUsed, diskPerc)
 	} else {
 		return ""
 	}
