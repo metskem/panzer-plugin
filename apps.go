@@ -152,11 +152,11 @@ func listApps(args []string) {
 	}
 	_ = table.PrintTo(os.Stdout)
 
-	fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals()))
+	fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals(colNames)))
 }
 
 /** getTotals - Get all totals for the apps in the space, like total # of apps and total memory usage. */
-func getTotals() string {
+func getTotals(colNames []string) string {
 	var totalApps = 0
 	var totalAppsStarted = 0
 	var totalInstances = 0
@@ -192,7 +192,12 @@ func getTotals() string {
 		if totalDisk != 0 {
 			diskPerc = 100 * totalDiskUsed / totalDisk
 		}
-		return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, memPerc, totalCpuUsed, totalDisk, totalDiskUsed, diskPerc)
+		if processStatsRequired(colNames) {
+			// we only have the "used" statistics if we requested at least one instance level column, if not we provide less statistics
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, memPerc, totalCpuUsed, totalDisk, totalDiskUsed, diskPerc)
+		} else {
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, Cpu %4.0f%%, Disk(MB): requested:%d", totalApps, totalAppsStarted, totalInstances, totalMemory, totalCpuUsed, totalDisk)
+		}
 	} else {
 		return ""
 	}
