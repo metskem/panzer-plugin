@@ -37,7 +37,6 @@ var (
 //
 // Any error handling should be handled with the plugin itself (this means printing user facing errors).
 // The CLI will exit 0 if the plugin exits 0 and will exit 1 should the plugin exits nonzero.
-//
 func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	switch args[0] {
 	case "aa":
@@ -54,7 +53,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 12},
+		Version:       plugin.VersionType{Major: 1, Minor: 0, Build: 13},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},

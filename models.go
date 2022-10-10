@@ -121,6 +121,7 @@ type Process struct {
 	Instances   int       `json:"instances"`
 	MemoryInMb  int       `json:"memory_in_mb"`
 	DiskInMb    int       `json:"disk_in_mb"`
+	LogRateBPS  int       `json:"log_rate_limit_in_bytes_per_second"`
 	HealthCheck struct {
 		Type string `json:"type"`
 		Data struct {
@@ -188,9 +189,10 @@ type ProcessStats struct {
 		InternalTLSProxyPort int `json:"internal_tls_proxy_port"`
 	} `json:"instance_ports"`
 	Usage struct {
-		Time time.Time `json:"time"`
-		CPU  float64   `json:"cpu"`
-		Mem  int       `json:"mem"`
-		Disk int       `json:"disk"`
+		Time    time.Time `json:"time"`
+		CPU     float64   `json:"cpu"`
+		Mem     int       `json:"mem"`
+		Disk    int       `json:"disk"`
+		LogRate int       `json:"log_rate"`
 	} `json:"usage"`
 }

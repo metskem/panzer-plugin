@@ -1,6 +1,6 @@
 module github/metskem/panzer-plugin
 
-go 1.17
+go 1.19
 
 require code.cloudfoundry.org/cli v7.1.0+incompatible
 

@@ -49,6 +49,7 @@ const colIx = "Ix"
 const colHost = "Host"
 const colCpu = "Cpu%"
 const colMemUsed = "MemUsed"
+const colLogUsed = "LogUsed"
 const colCreated = "Created"
 const colUpdated = "Updated"
 const colBuildpacks = "Buildpacks"
@@ -61,8 +62,8 @@ const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colProcState, colUptime, colInstancePorts}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colLogUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colLogUsed, colProcState, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
 func listApps(args []string) {
@@ -283,6 +284,16 @@ func getColValue(process Process, colName string) string {
 						memPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 					}
 					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
+				case colLogUsed:
+					// calculate and color the log used percentage
+					usedLog := stats.Usage.LogRate
+					logPercent := 100 * usedLog / process.LogRateBPS
+					logPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
+					if logPercent > 80 {
+						logPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
+					}
+					fmt.Printf("used log: %d, log limit: %d\n", usedLog, process.LogRateBPS)
+					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedLog, logPercentColored)
 				case colProcState:
 					if appData[process.Relationships.App.Data.GUID].State == "STARTED" && (stats.State == "CRASHED" || stats.State == "DOWN") {
 						column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(stats.State)))
