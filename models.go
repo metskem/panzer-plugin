@@ -196,3 +196,181 @@ type ProcessStats struct {
 		LogRate int       `json:"log_rate"`
 	} `json:"usage"`
 }
+
+type RoutesListResponse struct {
+	Pagination struct {
+		TotalResults int `json:"total_results"`
+		TotalPages   int `json:"total_pages"`
+		First        struct {
+			Href string `json:"href"`
+		} `json:"first"`
+		Last struct {
+			Href string `json:"href"`
+		} `json:"last"`
+		Next struct {
+			Href string `json:"href"`
+		} `json:"next"`
+		Previous interface{} `json:"previous"`
+	} `json:"pagination"`
+	Resources []RoutesListResource `json:"resources"`
+}
+
+type RoutesListResource struct {
+	GUID         string      `json:"guid"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+	Protocol     string      `json:"protocol"`
+	Host         string      `json:"host"`
+	Path         string      `json:"path"`
+	Port         interface{} `json:"port"`
+	URL          string      `json:"url"`
+	Destinations []struct {
+		GUID string `json:"guid"`
+		App  struct {
+			GUID    string `json:"guid"`
+			Process struct {
+				Type string `json:"type"`
+			} `json:"process"`
+		} `json:"app"`
+		Weight   interface{} `json:"weight"`
+		Port     int         `json:"port"`
+		Protocol string      `json:"protocol"`
+	} `json:"destinations"`
+	Metadata struct {
+		Labels struct {
+		} `json:"labels"`
+		Annotations struct {
+		} `json:"annotations"`
+	} `json:"metadata"`
+	Relationships struct {
+		Space struct {
+			Data struct {
+				GUID string `json:"guid"`
+			} `json:"data"`
+		} `json:"space"`
+		Domain struct {
+			Data struct {
+				GUID string `json:"guid"`
+			} `json:"data"`
+		} `json:"domain"`
+	} `json:"relationships"`
+	Links struct {
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+		Space struct {
+			Href string `json:"href"`
+		} `json:"space"`
+		Destinations struct {
+			Href string `json:"href"`
+		} `json:"destinations"`
+		Domain struct {
+			Href string `json:"href"`
+		} `json:"domain"`
+	} `json:"links"`
+}
+
+type Domain struct {
+	GUID               string      `json:"guid"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+	Name               string      `json:"name"`
+	Internal           bool        `json:"internal"`
+	RouterGroup        interface{} `json:"router_group"`
+	SupportedProtocols []string    `json:"supported_protocols"`
+	Relationships      struct {
+		Organization struct {
+			Data interface{} `json:"data"`
+		} `json:"organization"`
+		SharedOrganizations struct {
+			Data []interface{} `json:"data"`
+		} `json:"shared_organizations"`
+	} `json:"relationships"`
+	Metadata struct {
+		Labels struct {
+		} `json:"labels"`
+		Annotations struct {
+		} `json:"annotations"`
+	} `json:"metadata"`
+	Links struct {
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+		RouteReservations struct {
+			Href string `json:"href"`
+		} `json:"route_reservations"`
+	} `json:"links"`
+}
+
+type Space struct {
+	GUID          string    `json:"guid"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Name          string    `json:"name"`
+	Relationships struct {
+		Organization struct {
+			Data struct {
+				GUID string `json:"guid"`
+			} `json:"data"`
+		} `json:"organization"`
+		Quota struct {
+			Data interface{} `json:"data"`
+		} `json:"quota"`
+	} `json:"relationships"`
+	Metadata struct {
+		Labels struct {
+		} `json:"labels"`
+		Annotations struct {
+		} `json:"annotations"`
+	} `json:"metadata"`
+	Links struct {
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+		Organization struct {
+			Href string `json:"href"`
+		} `json:"organization"`
+		Features struct {
+			Href string `json:"href"`
+		} `json:"features"`
+		ApplyManifest struct {
+			Href   string `json:"href"`
+			Method string `json:"method"`
+		} `json:"apply_manifest"`
+	} `json:"links"`
+}
+
+type Org struct {
+	GUID          string    `json:"guid"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Name          string    `json:"name"`
+	Suspended     bool      `json:"suspended"`
+	Relationships struct {
+		Quota struct {
+			Data struct {
+				GUID string `json:"guid"`
+			} `json:"data"`
+		} `json:"quota"`
+	} `json:"relationships"`
+	Metadata struct {
+		Labels struct {
+		} `json:"labels"`
+		Annotations struct {
+		} `json:"annotations"`
+	} `json:"metadata"`
+	Links struct {
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+		Domains struct {
+			Href string `json:"href"`
+		} `json:"domains"`
+		DefaultDomain struct {
+			Href string `json:"href"`
+		} `json:"default_domain"`
+		Quota struct {
+			Href string `json:"href"`
+		} `json:"quota"`
+	} `json:"links"`
+}

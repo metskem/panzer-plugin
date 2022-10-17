@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -86,14 +86,10 @@ func listApps(args []string) {
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 	resp, err := httpClient.Do(&httpRequest)
 	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
-		os.Exit(1)
-	}
-	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to list apps: %s", err)))
 		os.Exit(1)
 	}
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	appsListResponse := AppsListResponse{}
 	err = json.Unmarshal(body, &appsListResponse)
 	if err != nil {
@@ -124,7 +120,7 @@ func listApps(args []string) {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to list apps: %s", err)))
 		os.Exit(1)
 	}
-	body, _ = ioutil.ReadAll(resp.Body)
+	body, _ = io.ReadAll(resp.Body)
 	processListResponse = ProcessesListResponse{}
 	err = json.Unmarshal(body, &processListResponse)
 	if err != nil {
@@ -413,7 +409,7 @@ func getProcessStat(process Process) {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
 		os.Exit(1)
 	}
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	processesStatsResponse := ProcessStatsResponse{}
 	err = json.Unmarshal(body, &processesStatsResponse)
 	if err != nil {
