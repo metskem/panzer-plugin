@@ -283,13 +283,16 @@ func getColValue(process Process, colName string) string {
 				case colLogUsed:
 					// calculate and color the log used percentage
 					usedLog := stats.Usage.LogRate
-					logPercent := 100 * usedLog / process.LogRateBPS
-					logPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
-					if logPercent > 80 {
-						logPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
+					if process.LogRateBPS == -1 || process.LogRateBPS == 0 { // unlimited or undefined log rate
+						column = fmt.Sprintf("%s%6d\n", column, usedLog)
+					} else {
+						logPercent := 100 * usedLog / process.LogRateBPS
+						logPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
+						if logPercent > 80 {
+							logPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
+						}
+						column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedLog, logPercentColored)
 					}
-					fmt.Printf("used log: %d, log limit: %d\n", usedLog, process.LogRateBPS)
-					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedLog, logPercentColored)
 				case colProcState:
 					if appData[process.Relationships.App.Data.GUID].State == "STARTED" && (stats.State == "CRASHED" || stats.State == "DOWN") {
 						column = fmt.Sprintf("%s%s\n", column, terminal.FailureColor(strings.ToLower(stats.State)))
