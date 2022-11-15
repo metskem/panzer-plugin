@@ -27,7 +27,7 @@ var (
 	httpClient        http.Client
 	apiEndpoint       string
 	ListAppsUsage     = fmt.Sprintf("aa [appname-prefix] - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
-	ListRoutesUsage   = "lr <hostname> - Do not specify the domain name, we will find all routes using this hostname"
+	ListRoutesUsage   = "lr [-t] <hostname> - Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 	skipSSLValidation bool
 )
 
@@ -46,7 +46,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 		listApps(args)
 	case "lr":
 		precheck(cliConnection)
-		listRoutes(args)
+		listRoutes(args, cliConnection)
 	}
 }
 
@@ -58,7 +58,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 1, Build: 1},
+		Version:       plugin.VersionType{Major: 1, Minor: 1, Build: 2},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},

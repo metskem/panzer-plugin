@@ -2,6 +2,7 @@ package main
 
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
+	"code.cloudfoundry.org/cli/plugin"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -15,12 +16,18 @@ import (
 var colNames = []string{"hostname", "domain", "org", "space"}
 
 /** listRoutes - The main function to produce the response to list routes. */
-func listRoutes(args []string) {
-	if len(args) != 2 {
-		fmt.Printf("Usage: \"cf lr <hostname>\"\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListRoutesHelpText, ListRoutesUsage)
+func listRoutes(args []string, cliConnection plugin.CliConnection) {
+	if len(args) < 2 || len(args) > 3 {
+		fmt.Printf("Usage: \"cf lr [-t] <hostname>\"\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListRoutesHelpText, ListRoutesUsage)
 		os.Exit(1)
 	}
 	hostname := args[1]
+	setTarget := false
+	if len(args) == 3 && args[1] == "-t" {
+		hostname = args[2]
+		setTarget = true
+	}
+
 	fmt.Printf("Getting routes for hostname %s as %s...\n\n", terminal.EntityNameColor(hostname), terminal.EntityNameColor(currentUser))
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSSLValidation}}
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(DefaultHttpTimeout) * time.Second}
@@ -42,6 +49,7 @@ func listRoutes(args []string) {
 		fmt.Printf("no routes found for hostname %s\n", hostname)
 	} else {
 		table := terminal.NewTable(colNames)
+		var orgName, spaceName string
 		for _, resource := range routesListResponse.Resources {
 			var colValues [4]string
 			colValues[0] = hostname
@@ -50,8 +58,15 @@ func listRoutes(args []string) {
 			colValues[2] = getAPIResource(space.Relationships.Organization.Data.GUID, "organizations").(Org).Name
 			colValues[3] = space.Name
 			table.Add(colValues[:]...)
+			orgName = colValues[2]
+			spaceName = space.Name
 		}
 		_ = table.PrintTo(os.Stdout)
+		if setTarget {
+			if _, err = cliConnection.CliCommandWithoutTerminalOutput("target", "-o", orgName, "-s", spaceName); err != nil {
+				fmt.Printf("failed to set target to org %s and space %s: %s", orgName, spaceName, err)
+			}
+		}
 	}
 }
 
