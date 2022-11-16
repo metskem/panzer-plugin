@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var colNames = []string{"hostname", "domain", "org", "space"}
+var colNames = []string{"hostname", "domain", "org", "space", "bound apps"}
 
 /** listRoutes - The main function to produce the response to list routes. */
 func listRoutes(args []string, cliConnection plugin.CliConnection) {
@@ -50,16 +50,22 @@ func listRoutes(args []string, cliConnection plugin.CliConnection) {
 	} else {
 		table := terminal.NewTable(colNames)
 		var orgName, spaceName string
-		for _, resource := range routesListResponse.Resources {
-			var colValues [4]string
+		for _, route := range routesListResponse.Resources {
+			var colValues [5]string
 			colValues[0] = hostname
-			colValues[1] = getAPIResource(resource.Relationships.Domain.Data.GUID, "domains").(Domain).Name
-			space := getAPIResource(resource.Relationships.Space.Data.GUID, "spaces").(Space)
+			colValues[1] = getAPIResource(route.Relationships.Domain.Data.GUID, "domains").(Domain).Name
+			space := getAPIResource(route.Relationships.Space.Data.GUID, "spaces").(Space)
 			colValues[2] = getAPIResource(space.Relationships.Organization.Data.GUID, "organizations").(Org).Name
 			colValues[3] = space.Name
 			table.Add(colValues[:]...)
 			orgName = colValues[2]
 			spaceName = space.Name
+			var destList string
+			for _, dest := range route.Destinations {
+				appName := getAPIResource(dest.App.GUID, "apps").(App).Name
+				destList = fmt.Sprintf("%s%s ", destList, appName)
+			}
+			colValues[4] = destList
 		}
 		_ = table.PrintTo(os.Stdout)
 		if setTarget {
@@ -94,6 +100,11 @@ func getAPIResource(guid string, apiResource string) interface{} {
 		domain := Domain{}
 		if err = json.Unmarshal(body, &domain); err == nil {
 			return domain
+		}
+	case "apps":
+		app := App{}
+		if err = json.Unmarshal(body, &app); err == nil {
+			return app
 		}
 	}
 	fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get response: %s", err)))

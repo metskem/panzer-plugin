@@ -20,10 +20,10 @@ type AppsListResponse struct {
 		} `json:"next"`
 		Previous interface{} `json:"previous"`
 	} `json:"pagination"`
-	Resources []AppsListResource `json:"resources"`
+	Resources []App `json:"resources"`
 }
 
-type AppsListResource struct {
+type App struct {
 	GUID      string    `json:"guid"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

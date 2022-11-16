@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var appData = make(map[string]AppsListResource)
+var appData = make(map[string]App)
 var processListResponse = ProcessesListResponse{}
 var processStats = make(map[string]ProcessStatsResponse)
 var appnamePrefix = ""
@@ -100,7 +100,7 @@ func listApps(args []string) {
 		fmt.Println("No apps found")
 		os.Exit(0)
 	}
-	// convert the json response to a map of AppsListResource keyed by appguid
+	// convert the json response to a map of App keyed by appguid
 	for _, appsListResource := range appsListResponse.Resources {
 		if strings.HasPrefix(appsListResource.Name, appnamePrefix) {
 			appData[appsListResource.GUID] = appsListResource
