@@ -1,26 +1,10 @@
-package main
+package model
 
 import "time"
 
-// PanzerPlugin is the struct implementing the interface defined by the core CLI. It can be found at  "code.cloudfoundry.org/cli/plugin/plugin.go"
-type PanzerPlugin struct{}
-
 type AppsListResponse struct {
-	Pagination struct {
-		TotalResults int `json:"total_results"`
-		TotalPages   int `json:"total_pages"`
-		First        struct {
-			Href string `json:"href"`
-		} `json:"first"`
-		Last struct {
-			Href string `json:"href"`
-		} `json:"last"`
-		Next struct {
-			Href string `json:"href"`
-		} `json:"next"`
-		Previous interface{} `json:"previous"`
-	} `json:"pagination"`
-	Resources []App `json:"resources"`
+	Pagination Pagination `json:"pagination"`
+	Resources  []App      `json:"resources"`
 }
 
 type App struct {
@@ -95,21 +79,8 @@ type App struct {
 }
 
 type ProcessesListResponse struct {
-	Pagination struct {
-		TotalResults int `json:"total_results"`
-		TotalPages   int `json:"total_pages"`
-		First        struct {
-			Href string `json:"href"`
-		} `json:"first"`
-		Last struct {
-			Href string `json:"href"`
-		} `json:"last"`
-		Next struct {
-			Href string `json:"href"`
-		} `json:"next"`
-		Previous interface{} `json:"previous"`
-	} `json:"pagination"`
-	Resources []Process `json:"resources"`
+	Pagination Pagination `json:"pagination"`
+	Resources  []Process  `json:"resources"`
 }
 
 type Process struct {
@@ -198,21 +169,8 @@ type ProcessStats struct {
 }
 
 type RoutesListResponse struct {
-	Pagination struct {
-		TotalResults int `json:"total_results"`
-		TotalPages   int `json:"total_pages"`
-		First        struct {
-			Href string `json:"href"`
-		} `json:"first"`
-		Last struct {
-			Href string `json:"href"`
-		} `json:"last"`
-		Next struct {
-			Href string `json:"href"`
-		} `json:"next"`
-		Previous interface{} `json:"previous"`
-	} `json:"pagination"`
-	Resources []RoutesListResource `json:"resources"`
+	Pagination Pagination           `json:"pagination"`
+	Resources  []RoutesListResource `json:"resources"`
 }
 
 type RoutesListResource struct {
@@ -373,4 +331,67 @@ type Org struct {
 			Href string `json:"href"`
 		} `json:"quota"`
 	} `json:"links"`
+}
+
+type Pagination struct {
+	TotalResults int `json:"total_results"`
+	TotalPages   int `json:"total_pages"`
+	First        struct {
+		Href string `json:"href"`
+	} `json:"first"`
+	Last struct {
+		Href string `json:"href"`
+	} `json:"last"`
+	Next struct {
+		Href string `json:"href"`
+	} `json:"next"`
+	Previous interface{} `json:"previous"`
+}
+
+type EventsListResponse struct {
+	Pagination Pagination `json:"pagination"`
+	Resources  []Event    `json:"resources"`
+}
+
+type Event struct {
+	GUID      string    `json:"guid"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Type      string    `json:"type"`
+	Actor     struct {
+		GUID string `json:"guid"`
+		Type string `json:"type"`
+		Name string `json:"name"`
+	} `json:"actor"`
+	Target struct {
+		GUID string `json:"guid"`
+		Type string `json:"type"`
+		Name string `json:"name"`
+	} `json:"target"`
+	Data struct {
+		Request struct {
+			Recursive bool `json:"recursive"`
+		} `json:"request"`
+	} `json:"data"`
+	Space struct {
+		GUID string `json:"guid"`
+	} `json:"space"`
+	Organization struct {
+		GUID string `json:"guid"`
+	} `json:"organization"`
+	Links struct {
+		Self struct {
+			Href string `json:"href"`
+		} `json:"self"`
+	} `json:"links"`
+}
+
+type OrgsListResponse struct {
+	Pagination Pagination `json:"pagination"`
+	Resources  []Org      `json:"resources"`
+}
+
+type SpacesListResponse struct {
+	Pagination Pagination `json:"pagination"`
+	Resources  []Space    `json:"resources"`
 }

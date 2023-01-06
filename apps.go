@@ -5,6 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/integrii/flaggy"
+	"github/metskem/panzer-plugin/conf"
+	"github/metskem/panzer-plugin/model"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,25 +20,24 @@ import (
 	"time"
 )
 
-var appData = make(map[string]App)
-var processListResponse = ProcessesListResponse{}
-var processStats = make(map[string]ProcessStatsResponse)
-var appnamePrefix = ""
+var appData = make(map[string]model.App)
+var processListResponse = model.ProcessesListResponse{}
+var processStats = make(map[string]model.ProcessStatsResponse)
 var processMutex sync.Mutex
 var concurrencyCounter int32
 var concurrencyCounterP *int32
 
-type processList []Process
+type ProcessList []model.Process
 
-func (list processList) Len() int {
+func (list ProcessList) Len() int {
 	return len(list)
 }
 
-func (list processList) Less(i, j int) bool {
+func (list ProcessList) Less(i, j int) bool {
 	return strings.ToLower(appData[list[i].Relationships.App.Data.GUID].Name) < strings.ToLower(appData[list[j].Relationships.App.Data.GUID].Name)
 }
 
-func (list processList) Swap(i, j int) {
+func (list ProcessList) Swap(i, j int) {
 	list[i], list[j] = list[j], list[i]
 }
 
@@ -66,23 +68,22 @@ var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, c
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colLogUsed, colProcState, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
-func listApps(args []string) {
-	if len(args) < 1 || len(args) > 2 {
-		fmt.Printf("Usage: \"cf aa [appname-prefix]\". (Use envvar CF_COLS to specify the output columns)`\n\nNAME:\n   %s\n\nUSAGE:\n   %s\n", ListAppsHelpText, ListAppsUsage)
-		os.Exit(1)
-	}
-	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(currentOrg.Name), terminal.EntityNameColor(currentSpace.Name), terminal.EntityNameColor(currentUser))
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSSLValidation}}
-	httpClient = http.Client{Transport: transport, Timeout: time.Duration(DefaultHttpTimeout) * time.Second}
-	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {accessToken}}
-	colNames := getRequestedColNames()
-	if len(args) == 2 {
-		appnamePrefix = args[1]
-	}
+func listApps() {
+	flaggy.DefaultParser.ShowHelpOnUnexpected = false
+	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
+	// Add flags
+	flaggy.String(&conf.FlagAppName, "a", "appname", "filter the output by the given (partial) appname")
+	// Parse the flags
+	flaggy.Parse()
+	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(conf.CurrentOrg.Name), terminal.EntityNameColor(conf.CurrentSpace.Name), terminal.EntityNameColor(conf.CurrentUser))
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
+	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
+	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
+	colNames = getRequestedColNames()
 
 	//
 	// get the /v3/apps data first
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
+	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", conf.ApiEndpoint, conf.CurrentSpace.Guid))
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 	resp, err := httpClient.Do(&httpRequest)
 	if err != nil {
@@ -90,7 +91,7 @@ func listApps(args []string) {
 		os.Exit(1)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	appsListResponse := AppsListResponse{}
+	appsListResponse := model.AppsListResponse{}
 	err = json.Unmarshal(body, &appsListResponse)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
@@ -102,14 +103,14 @@ func listApps(args []string) {
 	}
 	// convert the json response to a map of App keyed by appguid
 	for _, appsListResource := range appsListResponse.Resources {
-		if strings.HasPrefix(appsListResource.Name, appnamePrefix) {
+		if strings.HasPrefix(appsListResource.Name, conf.FlagAppName) {
 			appData[appsListResource.GUID] = appsListResource
 		}
 	}
 
 	//
 	// get the /v3/processes data next
-	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?per_page=1000&space_guids=%s", apiEndpoint, currentSpace.Guid))
+	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?per_page=1000&space_guids=%s", conf.ApiEndpoint, conf.CurrentSpace.Guid))
 	httpRequest = http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
 	resp, err = httpClient.Do(&httpRequest)
 	if err != nil {
@@ -121,12 +122,12 @@ func listApps(args []string) {
 		os.Exit(1)
 	}
 	body, _ = io.ReadAll(resp.Body)
-	processListResponse = ProcessesListResponse{}
+	processListResponse = model.ProcessesListResponse{}
 	err = json.Unmarshal(body, &processListResponse)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
 	}
-	var pList processList
+	var pList ProcessList
 	pList = processListResponse.Resources
 	sort.Sort(pList)
 	//
@@ -138,7 +139,7 @@ func listApps(args []string) {
 	table := terminal.NewTable(colNames)
 	for _, process := range processListResponse.Resources {
 		if !(process.Type == "task" && process.Instances == 0) {
-			if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+			if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
 				var colValues []string
 				for _, colName := range colNames {
 					colValues = append(colValues, getColValue(process, colName))
@@ -163,7 +164,7 @@ func getTotals(colNames []string) string {
 	var totalDiskUsed = 0
 	var totalCpuUsed float64
 	for _, process := range processListResponse.Resources {
-		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
 			if !(process.Type == "task" && process.Instances == 0) {
 				totalApps++
 				if appData[process.Relationships.App.Data.GUID].State == "STARTED" {
@@ -255,7 +256,7 @@ func getRequestedColNames() []string {
 }
 
 /** - getColValue - Get the value of the given column.*/
-func getColValue(process Process, colName string) string {
+func getColValue(process model.Process, colName string) string {
 	var column string
 	// per app instance columns
 	if isInstanceColumn(colName) {
@@ -378,11 +379,11 @@ func isInstanceColumn(name string) bool {
 }
 
 /** getProcessStats - Iterate over all processes and get the stats from them (concurrently) */
-func getProcessStats(processListResponse ProcessesListResponse) map[string]ProcessStatsResponse {
-	processStats = make(map[string]ProcessStatsResponse)
+func getProcessStats(processListResponse model.ProcessesListResponse) map[string]model.ProcessStatsResponse {
+	processStats = make(map[string]model.ProcessStatsResponse)
 	concurrencyCounterP = &concurrencyCounter
 	for _, process := range processListResponse.Resources {
-		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, appnamePrefix) {
+		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
 			if !(process.Type == "task" && process.Instances == 0) {
 				atomic.AddInt32(concurrencyCounterP, 1)
 				// throttle a bit:
@@ -403,7 +404,7 @@ func getProcessStats(processListResponse ProcessesListResponse) map[string]Proce
 }
 
 /** getProcessStat - Perform an http request to get the stats. This function is called concurrently. */
-func getProcessStat(process Process) {
+func getProcessStat(process model.Process) {
 	defer atomic.AddInt32(concurrencyCounterP, -1)
 	requestUrl, _ := url.Parse(process.Links.Stats.Href)
 	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
@@ -413,7 +414,7 @@ func getProcessStat(process Process) {
 		os.Exit(1)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	processesStatsResponse := ProcessStatsResponse{}
+	processesStatsResponse := model.ProcessStatsResponse{}
 	err = json.Unmarshal(body, &processesStatsResponse)
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))

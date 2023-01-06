@@ -4,32 +4,29 @@ import (
 	"code.cloudfoundry.org/cli/cf/i18n"
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
-	plugin_models "code.cloudfoundry.org/cli/plugin/models"
 	"code.cloudfoundry.org/cli/util/configv3"
 	"fmt"
+	"github/metskem/panzer-plugin/conf"
+	"github/metskem/panzer-plugin/event"
 	"net/http"
 	"os"
 )
 
 const (
-	DefaultHttpTimeout = 60
-
 	ListAppsHelpText   = "Lists basic information of apps in the current space"
 	ListRoutesHelpText = "Find the routes with their domain/org/space"
 )
 
 var (
-	accessToken       string
-	currentOrg        plugin_models.Organization
-	currentSpace      plugin_models.Space
-	currentUser       string
-	requestHeader     http.Header
-	httpClient        http.Client
-	apiEndpoint       string
-	ListAppsUsage     = fmt.Sprintf("aa [appname-prefix] - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
-	ListRoutesUsage   = "lr [-t] <hostname> - Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
-	skipSSLValidation bool
+	requestHeader http.Header
+	httpClient    http.Client
+
+	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
+	ListRoutesUsage = "lr [-t] <-r host-to-lookup>, use \"cf lr -help\" for full help message- Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 )
+
+// PanzerPlugin is the struct implementing the interface defined by the core CLI. It can be found at  "code.cloudfoundry.org/cli/plugin/plugin.go"
+type PanzerPlugin struct{}
 
 // Run must be implemented by any plugin because it is part of the plugin interface defined by the core CLI.
 //
@@ -40,13 +37,14 @@ var (
 // Any error handling should be handled with the plugin itself (this means printing user facing errors).
 // The CLI will exit 0 if the plugin exits 0 and will exit 1 should the plugin exits nonzero.
 func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
+	precheck(cliConnection)
 	switch args[0] {
 	case "aa":
-		precheck(cliConnection)
-		listApps(args)
+		listApps()
 	case "lr":
-		precheck(cliConnection)
-		listRoutes(args, cliConnection)
+		listRoutes(cliConnection)
+	case "ev":
+		event.GetEvents(cliConnection)
 	}
 }
 
@@ -58,11 +56,12 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 1, Build: 2},
+		Version:       plugin.VersionType{Major: 1, Minor: 2, Build: 0},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},
 			{Name: "lr", HelpText: ListRoutesHelpText, UsageDetails: plugin.Usage{Usage: ListRoutesUsage}},
+			{Name: "ev", HelpText: event.ListEventsHelpText, UsageDetails: plugin.Usage{Usage: event.ListEventsUsage}},
 		},
 	}
 }
@@ -76,30 +75,32 @@ func precheck(cliConnection plugin.CliConnection) {
 		fmt.Println(terminal.NotLoggedInText())
 		os.Exit(1)
 	}
-	currentUser, _ = cliConnection.Username()
+	conf.CurrentUser, _ = cliConnection.Username()
+
 	hasOrg, err := cliConnection.HasOrganization()
 	if err != nil || !hasOrg {
 		fmt.Println(terminal.FailureColor("please target your org/space first"))
 		os.Exit(1)
 	}
 	org, _ := cliConnection.GetCurrentOrg()
-	currentOrg = org
+	conf.CurrentOrg = org
 	hasSpace, err := cliConnection.HasSpace()
 	if err != nil || !hasSpace {
 		fmt.Println(terminal.FailureColor("please target your space first"))
 		os.Exit(1)
 	}
 	space, _ := cliConnection.GetCurrentSpace()
-	currentSpace = space
-	if accessToken, err = cliConnection.AccessToken(); err != nil {
+	conf.CurrentSpace = space
+
+	if conf.AccessToken, err = cliConnection.AccessToken(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	if apiEndpoint, err = cliConnection.ApiEndpoint(); err != nil {
+	if conf.ApiEndpoint, err = cliConnection.ApiEndpoint(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	if skipSSLValidation, err = cliConnection.IsSSLDisabled(); err != nil {
+	if conf.SkipSSLValidation, err = cliConnection.IsSSLDisabled(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
