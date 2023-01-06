@@ -29,15 +29,17 @@ You specify the hostname using the -r flag "cf lr -r my-test-app", and it will s
 If you specify the -t flag you will also be cf targeted to the org/space where the route was found.
 
 **For "cf ev":**  
-You can filter the output by optionally specifying one or more of the following flags (the value specified should be contained in the given field):  
-* -l (--limit) - the maximum numbers of results to show (currently limited to 5000)
-* -a (--action) - client side filter by action (i.e. delete)
-* -t (--target) - client side filter by target (i.e. myAppName)
-* -y (--type) - client side filter by type (i.e. app or service_instance)
-* -c (--actor) - client side filter by actor (i.e. user4711)
-* -o (--org) - server side filter by org name
-* -s (--space) - server side filter by space name
+You can filter the output by optionally specifying one or more of the following flags:
 
-An example to use all filters:  `cf ev --limit 4381 --action delete --target testapp --type route --actor user4711 --org my-org --space my-space`
+    -h --help          Displays help with available flag, subcommand, and positional value parameters.
+    -l --limit         Limit the output to max XXX events (default: 500)
+    -e --event-type    Filter the output (server side), (comma separated list of) event type to exactly match the filter (i.e. audit.app.update,app.crash)
+    -n --target-name   Filter the output (client side), target name to fuzzy match the filter
+    -t --target-type   Filter the output (client side), target type to fuzzy match the filter (i.e. app service_binding route)
+    -a --actor         Filter the output (client side), actor name to fuzzy match the filter
+    -o --org           Filter the output (server side), org name to exactly match the filter
+    -s --space         Filter the output (server side), space name to exactly match the filter
+
+An example to use all filters:  `cf ev --limit 4381 --event-type audit.app.stop --target-name testapp --target-type route --actor user4711 --org my-org --space my-space`
 
 Install the plugins as usual with _cf install-plugin <plugin binary>_

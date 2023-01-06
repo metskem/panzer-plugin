@@ -25,8 +25,7 @@ const (
 
 var (
 	ListEventsUsage = "ev - List recent audit events, use \"cf ev -help\" for full help message"
-	colNames        = []string{"timestamp", "action", "target", "type", "actor"}
-	maxEvents       = 1000
+	colNames        = []string{"timestamp", "event-type", "target-name", "target-type", "actor"}
 )
 
 type EventList []model.Event
@@ -49,12 +48,12 @@ func GetEvents(cliConnection plugin.CliConnection) {
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	// Add flags
 	flaggy.Int(&conf.FlagLimit, "l", "limit", "Limit the output to max XXX events")
-	flaggy.String(&conf.FlagFilterEventAction, "a", "action", "Filter the output (client side), action to match the filter")
-	flaggy.String(&conf.FlagFilterEventTarget, "t", "target", "Filter the output (client side), target to match the filter")
-	flaggy.String(&conf.FlagFilterEventType, "y", "type", "Filter the output (client side), type to match the filter")
-	flaggy.String(&conf.FlagFilterEventActor, "c", "actor", "Filter the output (client side), actor to match the filter")
-	flaggy.String(&conf.FlagFilterOrgName, "o", "org", "Filter the output (server side), org name to match the filter")
-	flaggy.String(&conf.FlagFilterSpaceName, "s", "space", "Filter the output (server side), space name to match the filter")
+	flaggy.String(&conf.FlagFilterEventTypes, "e", "event-type", "Filter the output (server side), (comma separated list of) event type to exactly match the filter (i.e. audit.app.update,app.crash)")
+	flaggy.String(&conf.FlagFilterEventTargetName, "n", "target-name", "Filter the output (client side), target name to fuzzy match the filter")
+	flaggy.String(&conf.FlagFilterEventTargetType, "t", "target-type", "Filter the output (client side), target type to fuzzy match the filter (i.e. app service_binding route)")
+	flaggy.String(&conf.FlagFilterEventActor, "a", "actor", "Filter the output (client side), actor name to fuzzy match the filter")
+	flaggy.String(&conf.FlagFilterEventOrgName, "o", "org", "Filter the output (server side), org name to exactly match the filter")
+	flaggy.String(&conf.FlagFilterEventSpaceName, "s", "space", "Filter the output (server side), space name to exactly match the filter")
 	flaggy.Parse()
 	if conf.FlagLimit > 5000 {
 		fmt.Printf("Output limited to 5000 rows\n")
@@ -71,25 +70,28 @@ func GetEvents(cliConnection plugin.CliConnection) {
 	// handle the serverside filters. You can specify one or both of orgname and spacename.
 	serverSideFilter := ""
 	var orgGuid, spaceGuid string
-	if conf.FlagFilterOrgName != "" {
-		if conf.FlagFilterSpaceName != "" {
-			orgGuid = getOrgGuid(conf.FlagFilterOrgName)
-			spaceGuid = getSpaceGuid(orgGuid, conf.FlagFilterSpaceName)
+	if conf.FlagFilterEventOrgName != "" {
+		if conf.FlagFilterEventSpaceName != "" {
+			orgGuid = getOrgGuid(conf.FlagFilterEventOrgName)
+			spaceGuid = getSpaceGuid(orgGuid, conf.FlagFilterEventSpaceName)
 			serverSideFilter = fmt.Sprintf("&space_guids=%s", spaceGuid)
 		} else {
-			orgGuid = getOrgGuid(conf.FlagFilterOrgName)
+			orgGuid = getOrgGuid(conf.FlagFilterEventOrgName)
 			serverSideFilter = fmt.Sprintf("&organization_guids=%s", orgGuid)
 		}
 	} else {
-		if conf.FlagFilterSpaceName != "" {
+		if conf.FlagFilterEventSpaceName != "" {
 			if currentOrg, err := cliConnection.GetCurrentOrg(); err != nil {
-				fmt.Sprintf("failed to get current org: %s\n", err)
+				fmt.Printf("failed to get current org: %s\n", err)
 				os.Exit(1)
 			} else {
-				spaceGuid = getSpaceGuid(currentOrg.Guid, conf.FlagFilterSpaceName)
+				spaceGuid = getSpaceGuid(currentOrg.Guid, conf.FlagFilterEventSpaceName)
 				serverSideFilter = fmt.Sprintf("&space_guids=%s", spaceGuid)
 			}
 		}
+	}
+	if conf.FlagFilterEventTypes != "" {
+		serverSideFilter = fmt.Sprintf("%s&types=%s", serverSideFilter, conf.FlagFilterEventTypes)
 	}
 
 	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/audit_events?per_page=%d&order_by=-created_at%s", conf.ApiEndpoint, conf.FlagLimit, serverSideFilter))
@@ -113,7 +115,7 @@ func GetEvents(cliConnection plugin.CliConnection) {
 		eventList = eventsListResponse.Resources
 		sort.Sort(eventList)
 		for _, event := range eventList {
-			if strings.Contains(event.Type, conf.FlagFilterEventAction) && strings.Contains(event.Target.Name, conf.FlagFilterEventTarget) && strings.Contains(event.Target.Type, conf.FlagFilterEventType) && strings.Contains(event.Actor.Name, conf.FlagFilterEventActor) {
+			if strings.Contains(event.Target.Name, conf.FlagFilterEventTargetName) && strings.Contains(event.Target.Type, conf.FlagFilterEventTargetType) && strings.Contains(event.Actor.Name, conf.FlagFilterEventActor) {
 				var colValues [5]string
 				colValues[0] = event.CreatedAt.Local().Format(timeFormat)
 				colValues[1] = event.Type
@@ -123,7 +125,7 @@ func GetEvents(cliConnection plugin.CliConnection) {
 					colValues[2] = event.Target.Name
 				}
 				colValues[3] = event.Target.Type
-				colValues[4] = event.Actor.Name
+				colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, event.Actor.Name)
 				table.Add(colValues[:]...)
 			}
 		}
