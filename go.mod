@@ -1,10 +1,9 @@
 module github/metskem/panzer-plugin
 
-go 1.19
+go 1.20
 
 require (
 	code.cloudfoundry.org/cli v7.1.0+incompatible
-	github.com/akamensky/argparse v1.4.0
 	github.com/integrii/flaggy v1.5.2
 )
 
