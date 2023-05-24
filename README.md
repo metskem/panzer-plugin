@@ -12,7 +12,7 @@ Instead of "cf apps" or "cf a" you now use **"cf aa [-a appname-prefix]"** to ge
 The environment variable **CF_COLS** can be used the specify a comma-separated list of column names.  
 The following column names are supported (case sensitive): 
 
-**Name,State,Memory,Disk,Type,#Inst,Host,Cpu%,MemUsed,Created,Updated,Buildpacks,HealthCheck,InvocTmout,Tmout,Guid,ProcState,Uptime,InstancePorts**   
+**Name,State,Memory,Disk,Type,#Inst,Host,Cpu%,MemUsed,Created,Updated,Buildpacks,Stack,HealthCheck,InvocTmout,Tmout,Guid,ProcState,Uptime,InstancePorts**   
 
 Mind that there are application related columns and application instance (process) related columns.  
 From the above set of columns, the following are process-related: 

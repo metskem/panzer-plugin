@@ -55,6 +55,7 @@ const colLogUsed = "LogUsed"
 const colCreated = "Created"
 const colUpdated = "Updated"
 const colBuildpacks = "Buildpacks"
+const colStack = "Stack"
 const colHealthCheck = "HealthCheck"
 const colHealthCheckInvocationTimeout = "InvocTmout"
 const colHealthCheckTimeout = "Tmout"
@@ -64,7 +65,7 @@ const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colLogUsed, colCreated, colUpdated, colBuildpacks, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colLogUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colLogUsed, colProcState, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
@@ -346,6 +347,8 @@ func getColValue(process model.Process, colName string) string {
 			return appData[process.Relationships.App.Data.GUID].UpdatedAt.Format(time.RFC3339)
 		case colBuildpacks:
 			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.Data.Buildpacks, ",")
+		case colStack:
+			return appData[process.Relationships.App.Data.GUID].Lifecycle.Data.Stack
 		case colHealthCheck:
 			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:
