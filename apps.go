@@ -163,6 +163,7 @@ func getTotals(colNames []string) string {
 	var totalDisk = 0
 	var totalMemoryUsed = 0
 	var totalDiskUsed = 0
+	var totalLogUsed = 0
 	var totalCpuUsed float64
 	for _, process := range processListResponse.Resources {
 		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
@@ -175,6 +176,7 @@ func getTotals(colNames []string) string {
 					totalDisk = totalDisk + process.DiskInMb*process.Instances
 					for _, stat := range processStats[process.GUID].Resources {
 						totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
+						totalLogUsed = totalLogUsed + stat.Usage.LogRate
 						totalMemoryUsed = totalMemoryUsed + stat.Usage.Mem/1024/1024
 						totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
 					}
@@ -193,9 +195,9 @@ func getTotals(colNames []string) string {
 		}
 		if processStatsRequired(colNames) {
 			// we only have the "used" statistics if we requested at least one instance level column, if not we provide less statistics
-			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, memPerc, totalCpuUsed, totalDisk, totalDiskUsed, diskPerc)
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%), LogRate(BPS):%d", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, memPerc, totalCpuUsed, totalDisk, totalDiskUsed, diskPerc, totalLogUsed)
 		} else {
-			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, Cpu %4.0f%%, Disk(MB): requested:%d", totalApps, totalAppsStarted, totalInstances, totalMemory, totalCpuUsed, totalDisk)
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, Cpu %4.0f%%, Disk(MB): requested:%d, LogRate(BPS):%d", totalApps, totalAppsStarted, totalInstances, totalMemory, totalCpuUsed, totalDisk, totalLogUsed)
 		}
 	} else {
 		return ""
