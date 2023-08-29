@@ -51,6 +51,7 @@ const colIx = "Ix"
 const colHost = "Host"
 const colCpu = "Cpu%"
 const colMemUsed = "MemUsed"
+const colDiskUsed = "DiskUsed"
 const colLogUsed = "LogUsed"
 const colCreated = "Created"
 const colUpdated = "Updated"
@@ -65,8 +66,8 @@ const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colLogUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colLogUsed, colProcState, colUptime, colInstancePorts}
+var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogUsed, colProcState, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
 func listApps() {
@@ -284,6 +285,18 @@ func getColValue(process model.Process, colName string) string {
 						memPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 					}
 					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
+				case colDiskUsed:
+					// calculate and color the memory used percentage
+					usedDisk := stats.Usage.Disk / 1024 / 1024
+					diskPercent := 100 * usedDisk / process.DiskInMb
+					diskPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(diskPercent)))
+					if diskPercent < 25 {
+						diskPercentColored = terminal.AdvisoryColor(fmt.Sprintf("%2s", strconv.Itoa(diskPercent)))
+					}
+					if diskPercent > 90 {
+						diskPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(diskPercent)))
+					}
+					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedDisk, diskPercentColored)
 				case colLogUsed:
 					// calculate and color the log used percentage
 					usedLog := stats.Usage.LogRate
