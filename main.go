@@ -40,6 +40,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	precheck(cliConnection)
 	switch args[0] {
 	case "aa":
+		checkTarget(cliConnection)
 		listApps()
 	case "lr":
 		listRoutes(cliConnection)
@@ -56,7 +57,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 3, Build: 3},
+		Version:       plugin.VersionType{Major: 1, Minor: 3, Build: 4},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},
@@ -66,17 +67,8 @@ func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	}
 }
 
-// precheck Does all common validations, like being logged in, and having a targeted org and space.
-func precheck(cliConnection plugin.CliConnection) {
-	config, _ := configv3.LoadConfig()
-	i18n.T = i18n.Init(config)
-	loggedIn, err := cliConnection.IsLoggedIn()
-	if err != nil || !loggedIn {
-		fmt.Println(terminal.NotLoggedInText())
-		os.Exit(1)
-	}
-	conf.CurrentUser, _ = cliConnection.Username()
-
+// checkTarget Checks if you currently have a targeted org and space.
+func checkTarget(cliConnection plugin.CliConnection) {
 	hasOrg, err := cliConnection.HasOrganization()
 	if err != nil || !hasOrg {
 		fmt.Println(terminal.FailureColor("please target your org/space first"))
@@ -91,6 +83,18 @@ func precheck(cliConnection plugin.CliConnection) {
 	}
 	space, _ := cliConnection.GetCurrentSpace()
 	conf.CurrentSpace = space
+}
+
+// precheck Does all common validations, like being logged in.
+func precheck(cliConnection plugin.CliConnection) {
+	config, _ := configv3.LoadConfig()
+	i18n.T = i18n.Init(config)
+	loggedIn, err := cliConnection.IsLoggedIn()
+	if err != nil || !loggedIn {
+		fmt.Println(terminal.NotLoggedInText())
+		os.Exit(1)
+	}
+	conf.CurrentUser, _ = cliConnection.Username()
 
 	if conf.AccessToken, err = cliConnection.AccessToken(); err != nil {
 		fmt.Println(err)

@@ -44,6 +44,7 @@ func (list ProcessList) Swap(i, j int) {
 const colAppName = "Name"
 const colState = "State"
 const colMemory = "Memory"
+const colLogRate = "LogRate"
 const colDisk = "Disk"
 const colType = "Type"
 const colInstances = "#Inst"
@@ -52,7 +53,7 @@ const colHost = "Host"
 const colCpu = "Cpu%"
 const colMemUsed = "MemUsed"
 const colDiskUsed = "DiskUsed"
-const colLogUsed = "LogUsed"
+const colLogRateUsed = "LogRateUsed"
 const colCreated = "Created"
 const colUpdated = "Updated"
 const colBuildpacks = "Buildpacks"
@@ -66,15 +67,15 @@ const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogUsed, colProcState, colUptime, colInstancePorts}
+var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
 func listApps() {
 	flaggy.DefaultParser.ShowHelpOnUnexpected = false
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	// Add flags
-	flaggy.String(&conf.FlagAppName, "a", "appname", "filter the output by the given (partial) appname")
+	flaggy.String(&conf.FlagAppName, "a", "appname", "filter the output by the given appname")
 	// Parse the flags
 	flaggy.Parse()
 	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(conf.CurrentOrg.Name), terminal.EntityNameColor(conf.CurrentSpace.Name), terminal.EntityNameColor(conf.CurrentUser))
@@ -196,9 +197,9 @@ func getTotals(colNames []string) string {
 		}
 		if processStatsRequired(colNames) {
 			// we only have the "used" statistics if we requested at least one instance level column, if not we provide less statistics
-			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, used:%d (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%d, used:%d (%2.0d%%), LogRate(BPS):%d", totalApps, totalAppsStarted, totalInstances, totalMemory, totalMemoryUsed, memPerc, totalCpuUsed, totalDisk, totalDiskUsed, diskPerc, totalLogUsed)
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%s, used:%s (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%s, used:%s (%2.0d%%), LogRate(BPS):%s", totalApps, totalAppsStarted, totalInstances, getFormattedUnit(totalMemory*1024*1024), getFormattedUnit(totalMemoryUsed*1024*1024), memPerc, totalCpuUsed, getFormattedUnit(totalDisk*1024*1024), getFormattedUnit(totalDiskUsed*1024*1024), diskPerc, getFormattedUnit(totalLogUsed))
 		} else {
-			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%d, Cpu %4.0f%%, Disk(MB): requested:%d, LogRate(BPS):%d", totalApps, totalAppsStarted, totalInstances, totalMemory, totalCpuUsed, totalDisk, totalLogUsed)
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%s, Cpu %4.0f%%, Disk(MB): requested:%s, LogRate(BPS):%s", totalApps, totalAppsStarted, totalInstances, getFormattedUnit(totalMemory*1024*1024), totalCpuUsed, getFormattedUnit(totalDisk*1024*1024), getFormattedUnit(totalLogUsed))
 		}
 	} else {
 		return ""
@@ -284,7 +285,7 @@ func getColValue(process model.Process, colName string) string {
 					if memPercent > 90 {
 						memPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 					}
-					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedMem, memPercentColored)
+					column = fmt.Sprintf("%s%4s (%s%%)\n", column, getFormattedUnit(usedMem*1024*1024), memPercentColored)
 				case colDiskUsed:
 					// calculate and color the memory used percentage
 					usedDisk := stats.Usage.Disk / 1024 / 1024
@@ -296,19 +297,19 @@ func getColValue(process model.Process, colName string) string {
 					if diskPercent > 90 {
 						diskPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(diskPercent)))
 					}
-					column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedDisk, diskPercentColored)
-				case colLogUsed:
+					column = fmt.Sprintf("%s%4s (%s%%)\n", column, getFormattedUnit(usedDisk*1024*1024), diskPercentColored)
+				case colLogRateUsed:
 					// calculate and color the log used percentage
 					usedLog := stats.Usage.LogRate
 					if process.LogRateBPS == -1 || process.LogRateBPS == 0 { // unlimited or undefined log rate
-						column = fmt.Sprintf("%s%6d\n", column, usedLog)
+						column = fmt.Sprintf("%s%6s\n", column, getFormattedUnit(usedLog))
 					} else {
 						logPercent := 100 * usedLog / process.LogRateBPS
 						logPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
 						if logPercent > 80 {
 							logPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
 						}
-						column = fmt.Sprintf("%s%4d (%s%%)\n", column, usedLog, logPercentColored)
+						column = fmt.Sprintf("%s%4s (%s%%)\n", column, getFormattedUnit(usedLog), logPercentColored)
 					}
 				case colProcState:
 					if appData[process.Relationships.App.Data.GUID].State == "STARTED" && (stats.State == "CRASHED" || stats.State == "DOWN") {
@@ -349,9 +350,11 @@ func getColValue(process model.Process, colName string) string {
 				return terminal.SuccessColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
 			}
 		case colMemory:
-			return fmt.Sprintf("%6d", process.MemoryInMb)
+			return fmt.Sprintf("%6s", getFormattedUnit(process.MemoryInMb*1024*1024))
+		case colLogRate:
+			return fmt.Sprintf("%6s", getFormattedUnit(process.LogRateBPS))
 		case colDisk:
-			return fmt.Sprintf("%6d", process.DiskInMb)
+			return fmt.Sprintf("%6s", getFormattedUnit(process.DiskInMb*1024*1024))
 		case colType:
 			return fmt.Sprintf("%4s", process.Type)
 		case colInstances:
@@ -440,6 +443,19 @@ func getProcessStat(process model.Process) {
 	processMutex.Lock()
 	processStats[process.GUID] = processesStatsResponse
 	processMutex.Unlock()
+}
+
+/** getFormattedUnit - Transform the input (integer) to a string formatted in K, M or G */
+func getFormattedUnit(unitValue int) string {
+	if unitValue >= 10*1024*1024*1024 {
+		return fmt.Sprintf("%dG", unitValue/1024/1024/1024)
+	} else if unitValue >= 10*1024*1024 {
+		return fmt.Sprintf("%dM", unitValue/1024/1024)
+	} else if unitValue >= 10*1024 {
+		return fmt.Sprintf("%dK", unitValue/1024)
+	} else {
+		return fmt.Sprintf("%d", unitValue)
+	}
 }
 
 /** getFormattedElapsedTime - Transform the input (time in seconds) to a string with number of days, hours, mins and secs, like "1d01h54m10s" */
