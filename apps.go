@@ -163,6 +163,7 @@ func getTotals(colNames []string) string {
 	var totalInstances = 0
 	var totalMemory = 0
 	var totalDisk = 0
+	var totalLog = 0
 	var totalMemoryUsed = 0
 	var totalDiskUsed = 0
 	var totalLogUsed = 0
@@ -176,6 +177,7 @@ func getTotals(colNames []string) string {
 					totalAppsStarted++
 					totalMemory = totalMemory + process.MemoryInMb*process.Instances
 					totalDisk = totalDisk + process.DiskInMb*process.Instances
+					totalLog = totalLog + process.LogRateBPS*process.Instances
 					for _, stat := range processStats[process.GUID].Resources {
 						totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
 						totalLogUsed = totalLogUsed + stat.Usage.LogRate
@@ -195,9 +197,16 @@ func getTotals(colNames []string) string {
 		if totalDisk != 0 {
 			diskPerc = 100 * totalDiskUsed / totalDisk
 		}
+		logPerc := 0
+		if totalLog != 0 {
+			logPerc = 100 * totalLogUsed / totalLog
+			if logPerc < 0 {
+				logPerc = 0
+			}
+		}
 		if processStatsRequired(colNames) {
 			// we only have the "used" statistics if we requested at least one instance level column, if not we provide less statistics
-			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%s, used:%s (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%s, used:%s (%2.0d%%), LogRate(BPS):%s", totalApps, totalAppsStarted, totalInstances, getFormattedUnit(totalMemory*1024*1024), getFormattedUnit(totalMemoryUsed*1024*1024), memPerc, totalCpuUsed, getFormattedUnit(totalDisk*1024*1024), getFormattedUnit(totalDiskUsed*1024*1024), diskPerc, getFormattedUnit(totalLogUsed))
+			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%s, used:%s (%2.0d%%), Cpu %4.0f%%, Disk(MB): requested:%s, used:%s (%2.0d%%), LogRate(BPS): requested:%s, used:%s (%2.0d%%)", totalApps, totalAppsStarted, totalInstances, getFormattedUnit(totalMemory*1024*1024), getFormattedUnit(totalMemoryUsed*1024*1024), memPerc, totalCpuUsed, getFormattedUnit(totalDisk*1024*1024), getFormattedUnit(totalDiskUsed*1024*1024), diskPerc, getFormattedUnit(totalLog), getFormattedUnit(totalLogUsed), logPerc)
 		} else {
 			return fmt.Sprintf("%d apps (%d started), %d running instances, Memory(MB): requested:%s, Cpu %4.0f%%, Disk(MB): requested:%s, LogRate(BPS):%s", totalApps, totalAppsStarted, totalInstances, getFormattedUnit(totalMemory*1024*1024), totalCpuUsed, getFormattedUnit(totalDisk*1024*1024), getFormattedUnit(totalLogUsed))
 		}
