@@ -1,6 +1,9 @@
 package conf
 
-import plugin_models "code.cloudfoundry.org/cli/plugin/models"
+import (
+	plugin_models "code.cloudfoundry.org/cli/plugin/models"
+	"regexp"
+)
 
 const (
 	DefaultHttpTimeout = 60
@@ -23,4 +26,5 @@ var (
 	FlagSwitchToSpace         bool
 	FlagRoute                 string
 	FlagAppName               string
+	AppNameRegex              regexp.Regexp
 )

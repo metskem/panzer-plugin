@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,6 +80,7 @@ func listApps() {
 	// Parse the flags
 	flaggy.Parse()
 	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(conf.CurrentOrg.Name), terminal.EntityNameColor(conf.CurrentSpace.Name), terminal.EntityNameColor(conf.CurrentUser))
+	conf.AppNameRegex = *regexp.MustCompile(conf.FlagAppName)
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
@@ -106,7 +108,7 @@ func listApps() {
 	}
 	// convert the json response to a map of App keyed by appguid
 	for _, appsListResource := range appsListResponse.Resources {
-		if strings.HasPrefix(appsListResource.Name, conf.FlagAppName) {
+		if conf.AppNameRegex.MatchString(appsListResource.Name) {
 			appData[appsListResource.GUID] = appsListResource
 		}
 	}
@@ -142,7 +144,7 @@ func listApps() {
 	table := terminal.NewTable(colNames)
 	for _, process := range processListResponse.Resources {
 		if !(process.Type == "task" && process.Instances == 0) {
-			if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
+			if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
 				var colValues []string
 				for _, colName := range colNames {
 					colValues = append(colValues, getColValue(process, colName))
@@ -169,7 +171,7 @@ func getTotals(colNames []string) string {
 	var totalLogUsed = 0
 	var totalCpuUsed float64
 	for _, process := range processListResponse.Resources {
-		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
+		if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
 			if !(process.Type == "task" && process.Instances == 0) {
 				totalApps++
 				if appData[process.Relationships.App.Data.GUID].State == "STARTED" {
@@ -413,7 +415,7 @@ func getProcessStats(processListResponse model.ProcessesListResponse) map[string
 	processStats = make(map[string]model.ProcessStatsResponse)
 	concurrencyCounterP = &concurrencyCounter
 	for _, process := range processListResponse.Resources {
-		if strings.HasPrefix(appData[process.Relationships.App.Data.GUID].Name, conf.FlagAppName) {
+		if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
 			if !(process.Type == "task" && process.Instances == 0) {
 				atomic.AddInt32(concurrencyCounterP, 1)
 				// throttle a bit:
