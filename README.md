@@ -7,7 +7,7 @@
 **For "cf aa":**  
 Choose the columns you want in your output with the envvar CF_COLS.  
 Limit the output by specifying the appname prefix with the -a flag, only apps who's names start with that prefix will be shown.  
-Instead of "cf apps" or "cf a" you now use **"cf aa [-a appname-prefix]"** to get the results.  
+Instead of "cf apps" or "cf a" you now use **"cf aa [-a appname]"** to get the results (appname is a regular expression).  
 
 The environment variable **CF_COLS** can be used the specify a comma-separated list of column names.  
 The following column names are supported (case sensitive): 
