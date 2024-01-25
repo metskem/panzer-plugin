@@ -8,6 +8,7 @@
 Choose the columns you want in your output with the envvar CF_COLS.  
 Limit the output by specifying the appname prefix with the -a flag, only apps who's names start with that prefix will be shown.  
 Instead of "cf apps" or "cf a" you now use **"cf aa [-a appname]"** to get the results (appname is a regular expression).  
+Use the -q (--hide-headers) to hide the column headers and the summary at the bottom (handy for processing the output).
 
 The environment variable **CF_COLS** can be used the specify a comma-separated list of column names.  
 The following column names are supported (case sensitive): 
@@ -39,6 +40,8 @@ You can filter the output by optionally specifying one or more of the following 
     -a --actor         Filter the output (client side), actor name to fuzzy match the filter
     -o --org           Filter the output (server side), org name to exactly match the filter
     -s --space         Filter the output (server side), space name to exactly match the filter
+
+    -q --hide-headers  Hide the column headers (handy for processing the output).
 
 An example to use all filters:  `cf ev --limit 4381 --event-type audit.app.stop --target-name testapp --target-type route --actor user4711 --org my-org --space my-space`
 

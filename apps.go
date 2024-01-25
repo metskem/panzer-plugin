@@ -77,9 +77,12 @@ func listApps() {
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	// Add flags
 	flaggy.String(&conf.FlagAppName, "a", "appname", "filter the output by the given appname")
+	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "hide the headers (and summary) of the output (handy for automated processing), default is false")
 	// Parse the flags
 	flaggy.Parse()
-	fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(conf.CurrentOrg.Name), terminal.EntityNameColor(conf.CurrentSpace.Name), terminal.EntityNameColor(conf.CurrentUser))
+	if !conf.FlagHideHeaders {
+		fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(conf.CurrentOrg.Name), terminal.EntityNameColor(conf.CurrentSpace.Name), terminal.EntityNameColor(conf.CurrentUser))
+	}
 	conf.AppNameRegex = *regexp.MustCompile(conf.FlagAppName)
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
@@ -142,6 +145,9 @@ func listApps() {
 	}
 
 	table := terminal.NewTable(colNames)
+	if conf.FlagHideHeaders {
+		table.NoHeaders()
+	}
 	for _, process := range processListResponse.Resources {
 		if !(process.Type == "task" && process.Instances == 0) {
 			if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
@@ -155,7 +161,9 @@ func listApps() {
 	}
 	_ = table.PrintTo(os.Stdout)
 
-	fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals(colNames)))
+	if !conf.FlagHideHeaders {
+		fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals(colNames)))
+	}
 }
 
 /** getTotals - Get all totals for the apps in the space, like total # of apps and total memory usage. */

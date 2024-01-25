@@ -26,5 +26,6 @@ var (
 	FlagSwitchToSpace         bool
 	FlagRoute                 string
 	FlagAppName               string
+	FlagHideHeaders           bool
 	AppNameRegex              regexp.Regexp
 )

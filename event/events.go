@@ -54,6 +54,7 @@ func GetEvents(cliConnection plugin.CliConnection) {
 	flaggy.String(&conf.FlagFilterEventActor, "a", "actor", "Filter the output (client side), actor name to fuzzy match the filter")
 	flaggy.String(&conf.FlagFilterEventOrgName, "o", "org", "Filter the output (server side), org name to exactly match the filter")
 	flaggy.String(&conf.FlagFilterEventSpaceName, "s", "space", "Filter the output (server side), space name to exactly match the filter")
+	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "Hide the headers of the output (handy for automated processing), default is false")
 	flaggy.Parse()
 	if conf.FlagLimit > 5000 {
 		fmt.Printf("Output limited to 5000 rows\n")
@@ -62,7 +63,9 @@ func GetEvents(cliConnection plugin.CliConnection) {
 
 	var httpClient http.Client
 	var requestHeader http.Header
-	fmt.Printf("Getting events as %s...\n\n", terminal.EntityNameColor(conf.CurrentUser))
+	if !conf.FlagHideHeaders {
+		fmt.Printf("Getting events as %s...\n\n", terminal.EntityNameColor(conf.CurrentUser))
+	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
@@ -111,6 +114,9 @@ func GetEvents(cliConnection plugin.CliConnection) {
 		fmt.Println("no audit_events found")
 	} else {
 		table := terminal.NewTable(colNames)
+		if conf.FlagHideHeaders {
+			table.NoHeaders()
+		}
 		var eventList EventList
 		eventList = eventsListResponse.Resources
 		sort.Sort(eventList)
