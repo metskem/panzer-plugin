@@ -64,12 +64,13 @@ const colHealthCheckInvocationTimeout = "InvocTmout"
 const colHealthCheckTimeout = "Tmout"
 const colGuid = "Guid"
 const colProcState = "ProcState"
+const colProcType = "ProcType"
 const colUptime = "Uptime"
 const colInstancePorts = "InstancePorts"
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colUptime, colInstancePorts}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colUptime, colInstancePorts}
+var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colProcType, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
 func listApps() {
@@ -344,6 +345,8 @@ func getColValue(process model.Process, colName string) string {
 							}
 						}
 					}
+				case colProcType:
+					column = fmt.Sprintf("%s%8s\n", column, process.Type)
 				case colUptime:
 					column = fmt.Sprintf("%s%12s\n", column, getFormattedElapsedTime(stats.Uptime))
 				case colInstancePorts:

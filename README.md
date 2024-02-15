@@ -13,7 +13,7 @@ Use the -q (--hide-headers) to hide the column headers and the summary at the bo
 The environment variable **CF_COLS** can be used the specify a comma-separated list of column names.  
 The following column names are supported (case sensitive): 
 
-**Name,State,Memory,LogRate,Disk,Type,#Inst,Host,Cpu%,MemUsed,LogRateUsed,Created,Updated,Buildpacks,Stack,HealthCheck,InvocTmout,Tmout,Guid,ProcState,Uptime,InstancePorts**   
+**Name,State,Memory,LogRate,Disk,Type,#Inst,Host,Cpu%,MemUsed,LogRateUsed,Created,Updated,Buildpacks,Stack,HealthCheck,InvocTmout,Tmout,Guid,ProcState,ProcType,Uptime,InstancePorts**   
 
 Mind that there are application related columns and application instance (process) related columns.  
 From the above set of columns, the following are process-related: 
