@@ -77,8 +77,8 @@ func listApps() {
 	flaggy.DefaultParser.ShowHelpOnUnexpected = false
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	// Add flags
-	flaggy.String(&conf.FlagAppName, "a", "appname", "filter the output by the given appname")
-	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "hide the headers (and summary) of the output (handy for automated processing), default is false")
+	flaggy.String(&conf.FlagAppName, "a", "appname", "Filter the output by the given appname")
+	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "Hide the headers (and summary) of the output (handy for automated processing), default is false")
 	// Parse the flags
 	flaggy.Parse()
 	if !conf.FlagHideHeaders {
