@@ -45,4 +45,10 @@ You can filter the output by optionally specifying one or more of the following 
 
 An example to use all filters:  `cf ev --limit 4381 --event-type audit.app.stop --target-name testapp --target-type route --actor user4711 --org my-org --space my-space`
 
-Install the plugins as usual with _cf install-plugin <plugin binary>_
+**Installation and upgrade**
+Download latest version from [releases](https://github.com/metskem/panzer-plugin/releases/latest)
+
+Install the plugins as usual with 
+```
+cf install-plugin <plugin binary>
+```
