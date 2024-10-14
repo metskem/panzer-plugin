@@ -21,7 +21,7 @@ var (
 	requestHeader http.Header
 	httpClient    http.Client
 
-	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are: %s", ValidColumns)
+	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are (comma separated): %s", ValidColumns)
 	ListRoutesUsage = "lr [-t] <-r host-to-lookup>, use \"cf lr -help\" for full help message- Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 )
 
@@ -57,7 +57,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 3, Build: 9},
+		Version:       plugin.VersionType{Major: 1, Minor: 4, Build: 0},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},

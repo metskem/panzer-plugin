@@ -1,7 +1,7 @@
 package conf
 
 import (
-	plugin_models "code.cloudfoundry.org/cli/plugin/models"
+	pluginmodels "code.cloudfoundry.org/cli/plugin/models"
 	"regexp"
 )
 
@@ -10,8 +10,8 @@ const (
 )
 
 var (
-	CurrentOrg                plugin_models.Organization
-	CurrentSpace              plugin_models.Space
+	CurrentOrg                pluginmodels.Organization
+	CurrentSpace              pluginmodels.Space
 	CurrentUser               string
 	SkipSSLValidation         bool
 	AccessToken               string
