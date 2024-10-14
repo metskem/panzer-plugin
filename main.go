@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github/metskem/panzer-plugin/conf"
 	"github/metskem/panzer-plugin/event"
+	"github/metskem/panzer-plugin/version"
 	"net/http"
 	"os"
 )
@@ -57,7 +58,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *PanzerPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name:          "panzer",
-		Version:       plugin.VersionType{Major: 1, Minor: 4, Build: 0},
+		Version:       plugin.VersionType{Major: version.GetMajorVersion(), Minor: version.GetMinorVersion(), Build: version.GetPatchVersion()},
 		MinCliVersion: plugin.VersionType{Major: 6, Minor: 7, Build: 0},
 		Commands: []plugin.Command{
 			{Name: "aa", HelpText: ListAppsHelpText, UsageDetails: plugin.Usage{Usage: ListAppsUsage}},
