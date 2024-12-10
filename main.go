@@ -22,7 +22,7 @@ var (
 	requestHeader http.Header
 	httpClient    http.Client
 
-	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are (comma separated): %s", ValidColumns)
+	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter] [-q], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are (comma separated): %s", ValidColumns)
 	ListRoutesUsage = "lr [-t] <-r host-to-lookup>, use \"cf lr -help\" for full help message- Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 )
 
