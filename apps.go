@@ -2,13 +2,18 @@ package main
 
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
+	"code.cloudfoundry.org/cli/plugin"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/integrii/flaggy"
 	"github/metskem/panzer-plugin/conf"
 	"github/metskem/panzer-plugin/model"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,12 +26,24 @@ import (
 	"time"
 )
 
-var appData = make(map[string]model.App)
-var processListResponse = model.ProcessesListResponse{}
-var processStats = make(map[string]model.ProcessStatsResponse)
-var processMutex sync.Mutex
-var concurrencyCounter int32
-var concurrencyCounterP *int32
+var (
+	appData             = make(map[string]model.App)
+	processListResponse = model.ProcessesListResponse{}
+	processStats        = make(map[string]model.ProcessStatsResponse)
+	processMutex        sync.Mutex
+	concurrencyCounter  int32
+	concurrencyCounterP *int32
+	totalApps           = 0
+	totalAppsStarted    = 0
+	totalInstances      = 0
+	totalMemory         = 0
+	totalDisk           = 0
+	totalLog            = 0
+	totalMemoryUsed     = 0
+	totalDiskUsed       = 0
+	totalLogUsed        = 0
+	totalCpuUsed        float64
+)
 
 type ProcessList []model.Process
 
@@ -42,43 +59,46 @@ func (list ProcessList) Swap(i, j int) {
 	list[i], list[j] = list[j], list[i]
 }
 
-const colAppName = "Name"
-const colState = "State"
-const colMemory = "Memory"
-const colLogRate = "LogRate"
-const colDisk = "Disk"
-const colType = "Type"
-const colInstances = "#Inst"
-const colIx = "Ix"
-const colHost = "Host"
-const colCpu = "Cpu%"
-const colMemUsed = "MemUsed"
-const colDiskUsed = "DiskUsed"
-const colLogRateUsed = "LogRateUsed"
-const colCreated = "Created"
-const colUpdated = "Updated"
-const colBuildpacks = "Buildpacks"
-const colStack = "Stack"
-const colHealthCheck = "HealthCheck"
-const colHealthCheckInvocationTimeout = "InvocTmout"
-const colHealthCheckTimeout = "Tmout"
-const colGuid = "Guid"
-const colProcState = "ProcState"
-const colProcType = "ProcType"
-const colUptime = "Uptime"
-const colInstancePorts = "InstancePorts"
+const (
+	colAppName                      = "Name"
+	colState                        = "State"
+	colMemory                       = "Memory"
+	colLogRate                      = "LogRate"
+	colDisk                         = "Disk"
+	colType                         = "Type"
+	colInstances                    = "#Inst"
+	colIx                           = "Ix"
+	colHost                         = "Host"
+	colCpu                          = "Cpu%"
+	colMemUsed                      = "MemUsed"
+	colDiskUsed                     = "DiskUsed"
+	colLogRateUsed                  = "LogRateUsed"
+	colCreated                      = "Created"
+	colUpdated                      = "Updated"
+	colBuildpacks                   = "Buildpacks"
+	colStack                        = "Stack"
+	colHealthCheck                  = "HealthCheck"
+	colHealthCheckInvocationTimeout = "InvocTmout"
+	colHealthCheckTimeout           = "Tmout"
+	colGuid                         = "Guid"
+	colProcState                    = "ProcState"
+	colProcType                     = "ProcType"
+	colUptime                       = "Uptime"
+	colInstancePorts                = "InstancePorts"
+)
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
 var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colProcType, colUptime, colInstancePorts}
 
 /** listApps - The main function to produce the response. */
-func listApps() {
+func listApps(cliConnection plugin.CliConnection) {
 	flaggy.DefaultParser.ShowHelpOnUnexpected = false
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	// Add flags
 	flaggy.String(&conf.FlagAppName, "a", "appname", "Filter the output by the given appname")
 	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "Hide the headers (and summary) of the output (handy for automated processing), default is false")
+	flaggy.Bool(&conf.FlagShowQuotaUsage, "u", "show-quota-usage", "Show the space quota usage, default is false")
 	// Parse the flags
 	flaggy.Parse()
 	if !conf.FlagHideHeaders {
@@ -88,6 +108,19 @@ func listApps() {
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
 	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
 	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
+
+	cfHomeDir := os.Getenv("CF_HOME")
+	if cfHomeDir == "" {
+		cfHomeDir = os.Getenv("HOME")
+	}
+	if cfConfig, err := config.NewFromCFHomeDir(cfHomeDir); err != nil {
+		log.Fatalf("failed to create new config: %s", err)
+	} else {
+		if conf.CfClient, err = client.New(cfConfig); err != nil {
+			fmt.Printf("failed to create new cf client: %s\n", err)
+			os.Exit(1)
+		}
+	}
 	colNames = getRequestedColNames()
 
 	//
@@ -126,10 +159,6 @@ func listApps() {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
 		os.Exit(1)
 	}
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to list apps: %s", err)))
-		os.Exit(1)
-	}
 	body, _ = io.ReadAll(resp.Body)
 	processListResponse = model.ProcessesListResponse{}
 	err = json.Unmarshal(body, &processListResponse)
@@ -165,20 +194,89 @@ func listApps() {
 	if !conf.FlagHideHeaders {
 		fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals(colNames)))
 	}
+
+	if conf.FlagShowQuotaUsage {
+		if currentSpace, err := cliConnection.GetCurrentSpace(); err != nil {
+			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get current space: %s", err)))
+		} else {
+			if space, err := conf.CfClient.Spaces.Get(context.Background(), currentSpace.Guid); err != nil {
+				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space: %s", err)))
+			} else {
+				if space.Relationships.Quota.Data != nil { // only if the space has a quota
+					if spaceQuota, err := conf.CfClient.SpaceQuotas.Get(context.Background(), space.Relationships.Quota.Data.GUID); err != nil {
+						fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space_quota: %s", err)))
+					} else {
+						appInstancesQuota := *spaceQuota.Apps.TotalInstances
+						serviceInstancesQuota := *spaceQuota.Services.TotalServiceInstances
+						routesQuota := *spaceQuota.Routes.TotalRoutes
+
+						tableColumns := []string{"Quota", "Usage", "Allocation", "Quota", "Quota %"}
+						table = terminal.NewTable(tableColumns)
+
+						memPerc := 0
+						memQuota := *spaceQuota.Apps.TotalMemoryInMB
+						if totalMemory != 0 {
+							memPerc = 100 * totalMemory / memQuota
+						}
+						memPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
+						if memPerc > 80 {
+							memPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
+						}
+
+						logPerc := 0
+						logQuota := *spaceQuota.Apps.LogRateLimitInBytesPerSecond
+						if totalLog != 0 {
+							logPerc = 100 * totalLog / logQuota
+						}
+						logPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
+						if logPerc > 80 {
+							logPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
+						}
+
+						appInstancesPerc := 100 * totalInstances / appInstancesQuota
+						appInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
+						if appInstancesPerc > 80 {
+							appInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
+						}
+						table.Add("app instances", fmt.Sprintf("%5d", totalInstances), "        -", fmt.Sprintf("%d", appInstancesQuota), appInstancesPercColored)
+
+						if serviceInstances, err := conf.CfClient.ServiceInstances.ListAll(context.Background(), &client.ServiceInstanceListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
+							fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get service instances: %s", err)))
+						} else {
+							serviceInstancesPerc := 100 * len(serviceInstances) / serviceInstancesQuota
+							serviceInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
+							if serviceInstancesPerc > 80 {
+								serviceInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
+							}
+							table.Add("service instances", fmt.Sprintf("%5d", len(serviceInstances)), "        -", fmt.Sprintf("%5d", serviceInstancesQuota), serviceInstancesPercColored)
+						}
+
+						if routes, err := conf.CfClient.Routes.ListAll(context.Background(), &client.RouteListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
+							fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get routes: %s", err)))
+						} else {
+							routesPerc := 100 * len(routes) / routesQuota
+							routesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
+							if routesPerc > 80 {
+								routesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
+							}
+							table.Add("routes", fmt.Sprintf("%5d", len(routes)), "        -", fmt.Sprintf("%5d", routesQuota), routesPercColored)
+						}
+
+						table.Add("memory", fmt.Sprintf("%5s", getFormattedUnit(totalMemoryUsed*1024*1024)), fmt.Sprintf("%10s", getFormattedUnit(totalMemory*1024*1024)), fmt.Sprintf("%5s", getFormattedUnit(memQuota*1024*1024)), memPercColored)
+						table.Add("log_rate", fmt.Sprintf("%5s", getFormattedUnit(totalLogUsed)), fmt.Sprintf("%10s", getFormattedUnit(totalLog)), fmt.Sprintf("%5s", getFormattedUnit(logQuota)), logPercColored)
+
+					}
+				} else {
+					fmt.Printf("No space quota found for space %s\n", terminal.EntityNameColor(conf.CurrentSpace.Name))
+				}
+			}
+			_ = table.PrintTo(os.Stdout)
+		}
+	}
 }
 
 /** getTotals - Get all totals for the apps in the space, like total # of apps and total memory usage. */
 func getTotals(colNames []string) string {
-	var totalApps = 0
-	var totalAppsStarted = 0
-	var totalInstances = 0
-	var totalMemory = 0
-	var totalDisk = 0
-	var totalLog = 0
-	var totalMemoryUsed = 0
-	var totalDiskUsed = 0
-	var totalLogUsed = 0
-	var totalCpuUsed float64
 	for _, process := range processListResponse.Resources {
 		if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
 			if !(process.Type == "task" && process.Instances == 0) {
@@ -228,7 +326,7 @@ func getTotals(colNames []string) string {
 
 /** processStatsRequired - If we want at least one instance level column, we need the app process stats (and we have to make a lot more http calls if the space has a lot of apps) */
 func processStatsRequired(colNames []string) bool {
-	var isProcessColumn bool = false
+	var isProcessColumn = false
 	for _, colName := range colNames {
 		for _, processColumn := range InstanceLevelColumns {
 			if colName == processColumn {

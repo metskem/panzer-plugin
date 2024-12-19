@@ -2,6 +2,7 @@ package conf
 
 import (
 	pluginmodels "code.cloudfoundry.org/cli/plugin/models"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"regexp"
 )
 
@@ -10,6 +11,7 @@ const (
 )
 
 var (
+	CfClient                  *client.Client
 	CurrentOrg                pluginmodels.Organization
 	CurrentSpace              pluginmodels.Space
 	CurrentUser               string
@@ -27,5 +29,6 @@ var (
 	FlagRoute                 string
 	FlagAppName               string
 	FlagHideHeaders           bool
+	FlagShowQuotaUsage        bool
 	AppNameRegex              regexp.Regexp
 )

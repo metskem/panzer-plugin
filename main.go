@@ -22,7 +22,7 @@ var (
 	requestHeader http.Header
 	httpClient    http.Client
 
-	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter] [-q], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are (comma separated): %s", ValidColumns)
+	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter] [-q] [-u], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are (comma separated): %s", ValidColumns)
 	ListRoutesUsage = "lr [-t] <-r host-to-lookup>, use \"cf lr -help\" for full help message- Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 )
 
@@ -38,11 +38,11 @@ type PanzerPlugin struct{}
 // Any error handling should be handled with the plugin itself (this means printing user facing errors).
 // The CLI will exit 0 if the plugin exits 0 and will exit 1 should the plugin exits nonzero.
 func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
-	precheck(cliConnection)
+	preCheck(cliConnection)
 	switch args[0] {
 	case "aa":
 		checkTarget(cliConnection)
-		listApps()
+		listApps(cliConnection)
 	case "lr":
 		listRoutes()
 	case "ev":
@@ -86,8 +86,8 @@ func checkTarget(cliConnection plugin.CliConnection) {
 	conf.CurrentSpace = space
 }
 
-// precheck Does all common validations, like being logged in.
-func precheck(cliConnection plugin.CliConnection) {
+// preCheck Does all common validations, like being logged in.
+func preCheck(cliConnection plugin.CliConnection) {
 	config, _ := configv3.LoadConfig()
 	i18n.T = i18n.Init(config)
 	loggedIn, err := cliConnection.IsLoggedIn()

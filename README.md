@@ -25,6 +25,10 @@ If you specify one ore more of these columns, you will get data for each instanc
 
 To get all columns (you need a wide screen), specify: **CF_COLS=ALL**
 
+**For "cf aa":**  
+-q --hide-headers  Hide the column headers (handy for processing the output).
+-u --show-quota-usage Show the quota and quota usage for the current space.
+
 **For "cf lr":**  
 You specify the hostname using the -r flag "cf lr -r my-test-app", and it will search the route(s) and the domains and in which org and space they live and present it in a table.  
 If you specify the -t flag you will also be cf targeted to the org/space where the route was found.
@@ -40,8 +44,6 @@ You can filter the output by optionally specifying one or more of the following 
     -a --actor         Filter the output (client side), actor name to fuzzy match the filter
     -o --org           Filter the output (server side), org name to exactly match the filter
     -s --space         Filter the output (server side), space name to exactly match the filter
-
-    -q --hide-headers  Hide the column headers (handy for processing the output).
 
 An example to use all filters:  `cf ev --limit 4381 --event-type audit.app.stop --target-name testapp --target-type route --actor user4711 --org my-org --space my-space`
 
