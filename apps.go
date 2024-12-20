@@ -4,18 +4,11 @@ import (
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/integrii/flaggy"
 	"github/metskem/panzer-plugin/conf"
-	"github/metskem/panzer-plugin/model"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -27,9 +20,9 @@ import (
 )
 
 var (
-	appData             = make(map[string]model.App)
-	processListResponse = model.ProcessesListResponse{}
-	processStats        = make(map[string]model.ProcessStatsResponse)
+	appData             = make(map[string]*resource.App)
+	processes           = make([]*resource.Process, 0)
+	processStats        = make(map[string]*resource.ProcessStats)
 	processMutex        sync.Mutex
 	concurrencyCounter  int32
 	concurrencyCounterP *int32
@@ -45,7 +38,7 @@ var (
 	totalCpuUsed        float64
 )
 
-type ProcessList []model.Process
+type ProcessList []*resource.Process
 
 func (list ProcessList) Len() int {
 	return len(list)
@@ -95,202 +88,171 @@ var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, co
 func listApps(cliConnection plugin.CliConnection) {
 	flaggy.DefaultParser.ShowHelpOnUnexpected = false
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
-	// Add flags
 	flaggy.String(&conf.FlagAppName, "a", "appname", "Filter the output by the given appname")
 	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "Hide the headers (and summary) of the output (handy for automated processing), default is false")
 	flaggy.Bool(&conf.FlagShowQuotaUsage, "u", "show-quota-usage", "Show the space quota usage, default is false")
-	// Parse the flags
 	flaggy.Parse()
 	if !conf.FlagHideHeaders {
 		fmt.Printf("Getting apps for org %s / space %s as %s...\n\n", terminal.EntityNameColor(conf.CurrentOrg.Name), terminal.EntityNameColor(conf.CurrentSpace.Name), terminal.EntityNameColor(conf.CurrentUser))
 	}
 	conf.AppNameRegex = *regexp.MustCompile(conf.FlagAppName)
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
-	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
-	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
 
-	cfHomeDir := os.Getenv("CF_HOME")
-	if cfHomeDir == "" {
-		cfHomeDir = os.Getenv("HOME")
-	}
-	if cfConfig, err := config.NewFromCFHomeDir(cfHomeDir); err != nil {
-		log.Fatalf("failed to create new config: %s", err)
-	} else {
-		if conf.CfClient, err = client.New(cfConfig); err != nil {
-			fmt.Printf("failed to create new cf client: %s\n", err)
-			os.Exit(1)
-		}
-	}
 	colNames = getRequestedColNames()
-
-	//
-	// get the /v3/apps data first
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/apps?per_page=1000&space_guids=%s", conf.ApiEndpoint, conf.CurrentSpace.Guid))
-	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	resp, err := httpClient.Do(&httpRequest)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to list apps: %s", err)))
+	if currentSpace, err := cliConnection.GetCurrentSpace(); err != nil {
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get current space: %s", err)))
 		os.Exit(1)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	appsListResponse := model.AppsListResponse{}
-	err = json.Unmarshal(body, &appsListResponse)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-	}
-
-	if len(appsListResponse.Resources) == 0 {
-		fmt.Println("No apps found")
-		os.Exit(0)
-	}
-	// convert the json response to a map of App keyed by appguid
-	for _, appsListResource := range appsListResponse.Resources {
-		if conf.AppNameRegex.MatchString(appsListResource.Name) {
-			appData[appsListResource.GUID] = appsListResource
-		}
-	}
-
-	//
-	// get the /v3/processes data next
-	requestUrl, _ = url.Parse(fmt.Sprintf("%s/v3/processes?per_page=1000&space_guids=%s", conf.ApiEndpoint, conf.CurrentSpace.Guid))
-	httpRequest = http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	resp, err = httpClient.Do(&httpRequest)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
-		os.Exit(1)
-	}
-	body, _ = io.ReadAll(resp.Body)
-	processListResponse = model.ProcessesListResponse{}
-	err = json.Unmarshal(body, &processListResponse)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-	}
-	var pList ProcessList
-	pList = processListResponse.Resources
-	sort.Sort(pList)
-	//
-	// optionally get the stats (per instance stats)
-	if processStatsRequired(colNames) {
-		processStats = getProcessStats(processListResponse)
-	}
-
-	table := terminal.NewTable(colNames)
-	if conf.FlagHideHeaders {
-		table.NoHeaders()
-	}
-	for _, process := range processListResponse.Resources {
-		if !(process.Type == "task" && process.Instances == 0) {
-			if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
-				var colValues []string
-				for _, colName := range colNames {
-					colValues = append(colValues, getColValue(process, colName))
-				}
-				table.Add(colValues[:]...)
-			}
-		}
-	}
-	_ = table.PrintTo(os.Stdout)
-
-	if !conf.FlagHideHeaders {
-		fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals(colNames)))
-	}
-
-	if conf.FlagShowQuotaUsage {
-		if currentSpace, err := cliConnection.GetCurrentSpace(); err != nil {
-			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get current space: %s", err)))
+	} else {
+		conf.CurrentSpace = currentSpace
+		// get the apps
+		if apps, err := conf.CfClient.Applications.ListAll(conf.CfCtx, &client.AppListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
+			fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get apps: %s", err)))
 		} else {
-			if space, err := conf.CfClient.Spaces.Get(context.Background(), currentSpace.Guid); err != nil {
-				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space: %s", err)))
-			} else {
-				if space.Relationships.Quota.Data != nil { // only if the space has a quota
-					if spaceQuota, err := conf.CfClient.SpaceQuotas.Get(context.Background(), space.Relationships.Quota.Data.GUID); err != nil {
-						fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space_quota: %s", err)))
-					} else {
-						appInstancesQuota := *spaceQuota.Apps.TotalInstances
-						serviceInstancesQuota := *spaceQuota.Services.TotalServiceInstances
-						routesQuota := *spaceQuota.Routes.TotalRoutes
-
-						tableColumns := []string{"Quota", "Usage", "Allocation", "Quota", "Quota %"}
-						table = terminal.NewTable(tableColumns)
-
-						memPerc := 0
-						memQuota := *spaceQuota.Apps.TotalMemoryInMB
-						if totalMemory != 0 {
-							memPerc = 100 * totalMemory / memQuota
-						}
-						memPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
-						if memPerc > 80 {
-							memPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
-						}
-
-						logPerc := 0
-						logQuota := *spaceQuota.Apps.LogRateLimitInBytesPerSecond
-						if totalLog != 0 {
-							logPerc = 100 * totalLog / logQuota
-						}
-						logPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
-						if logPerc > 80 {
-							logPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
-						}
-
-						appInstancesPerc := 100 * totalInstances / appInstancesQuota
-						appInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
-						if appInstancesPerc > 80 {
-							appInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
-						}
-						table.Add("app instances", fmt.Sprintf("%5d", totalInstances), "        -", fmt.Sprintf("%d", appInstancesQuota), appInstancesPercColored)
-
-						if serviceInstances, err := conf.CfClient.ServiceInstances.ListAll(context.Background(), &client.ServiceInstanceListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
-							fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get service instances: %s", err)))
-						} else {
-							serviceInstancesPerc := 100 * len(serviceInstances) / serviceInstancesQuota
-							serviceInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
-							if serviceInstancesPerc > 80 {
-								serviceInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
-							}
-							table.Add("service instances", fmt.Sprintf("%5d", len(serviceInstances)), "        -", fmt.Sprintf("%5d", serviceInstancesQuota), serviceInstancesPercColored)
-						}
-
-						if routes, err := conf.CfClient.Routes.ListAll(context.Background(), &client.RouteListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
-							fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get routes: %s", err)))
-						} else {
-							routesPerc := 100 * len(routes) / routesQuota
-							routesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
-							if routesPerc > 80 {
-								routesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
-							}
-							table.Add("routes", fmt.Sprintf("%5d", len(routes)), "        -", fmt.Sprintf("%5d", routesQuota), routesPercColored)
-						}
-
-						table.Add("memory", fmt.Sprintf("%5s", getFormattedUnit(totalMemoryUsed*1024*1024)), fmt.Sprintf("%10s", getFormattedUnit(totalMemory*1024*1024)), fmt.Sprintf("%5s", getFormattedUnit(memQuota*1024*1024)), memPercColored)
-						table.Add("log_rate", fmt.Sprintf("%5s", getFormattedUnit(totalLogUsed)), fmt.Sprintf("%10s", getFormattedUnit(totalLog)), fmt.Sprintf("%5s", getFormattedUnit(logQuota)), logPercColored)
-
-					}
-				} else {
-					fmt.Printf("No space quota found for space %s\n", terminal.EntityNameColor(conf.CurrentSpace.Name))
+			// convert the json response to a map of App keyed by appguid
+			for _, app := range apps {
+				if conf.AppNameRegex.MatchString(app.Name) {
+					appData[app.GUID] = app
 				}
 			}
-			_ = table.PrintTo(os.Stdout)
+
+			// get the processes
+			if unfilteredProcesses, err := conf.CfClient.Processes.ListAll(conf.CfCtx, &client.ProcessListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
+				fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get processes: %s", err)))
+			} else {
+				// filter out those processes that are not in the appData map
+				for _, process := range unfilteredProcesses {
+					if appData[process.Relationships.App.Data.GUID] != nil {
+						processes = append(processes, process)
+					}
+				}
+				var pList ProcessList
+				pList = processes
+				sort.Sort(pList)
+				//
+				// optionally get the stats (per instance stats)
+				if processStatsRequired(colNames) {
+					processStats = getProcessStats(processes)
+				}
+
+				table := terminal.NewTable(colNames)
+				if conf.FlagHideHeaders {
+					table.NoHeaders()
+				}
+				for _, process := range processes {
+					if !(process.Type == "task" && process.Instances == 0) {
+						if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
+							var colValues []string
+							for _, colName := range colNames {
+								colValues = append(colValues, getColValue(process, colName))
+							}
+							table.Add(colValues[:]...)
+						}
+					}
+				}
+				_ = table.PrintTo(os.Stdout)
+
+				if !conf.FlagHideHeaders {
+					fmt.Printf("\n  %s\n", terminal.StoppedColor(getTotals(colNames)))
+				}
+
+				if conf.FlagShowQuotaUsage {
+					if currentSpace, err = cliConnection.GetCurrentSpace(); err != nil {
+						fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get current space: %s", err)))
+					} else {
+						if space, err := conf.CfClient.Spaces.Get(context.Background(), currentSpace.Guid); err != nil {
+							fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space: %s", err)))
+						} else {
+							if space.Relationships.Quota.Data != nil { // only if the space has a quota
+								if spaceQuota, err := conf.CfClient.SpaceQuotas.Get(context.Background(), space.Relationships.Quota.Data.GUID); err != nil {
+									fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space_quota: %s", err)))
+								} else {
+									appInstancesQuota := *spaceQuota.Apps.TotalInstances
+									serviceInstancesQuota := *spaceQuota.Services.TotalServiceInstances
+									routesQuota := *spaceQuota.Routes.TotalRoutes
+
+									tableColumns := []string{"Quota", "Usage", "Allocation", "Quota", "Quota %"}
+									table = terminal.NewTable(tableColumns)
+
+									memPerc := 0
+									memQuota := *spaceQuota.Apps.TotalMemoryInMB
+									if totalMemory != 0 {
+										memPerc = 100 * totalMemory / memQuota
+									}
+									memPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
+									if memPerc > 80 {
+										memPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
+									}
+
+									logPerc := 0
+									logQuota := *spaceQuota.Apps.LogRateLimitInBytesPerSecond
+									if totalLog != 0 {
+										logPerc = 100 * totalLog / logQuota
+									}
+									logPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
+									if logPerc > 80 {
+										logPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
+									}
+
+									appInstancesPerc := 100 * totalInstances / appInstancesQuota
+									appInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
+									if appInstancesPerc > 80 {
+										appInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
+									}
+									table.Add("app instances", fmt.Sprintf("%5d", totalInstances), "        -", fmt.Sprintf("%5d", appInstancesQuota), appInstancesPercColored)
+
+									if serviceInstances, err := conf.CfClient.ServiceInstances.ListAll(context.Background(), &client.ServiceInstanceListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
+										fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get service instances: %s", err)))
+									} else {
+										serviceInstancesPerc := 100 * len(serviceInstances) / serviceInstancesQuota
+										serviceInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
+										if serviceInstancesPerc > 80 {
+											serviceInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
+										}
+										table.Add("service instances", fmt.Sprintf("%5d", len(serviceInstances)), "        -", fmt.Sprintf("%5d", serviceInstancesQuota), serviceInstancesPercColored)
+									}
+
+									if routes, err := conf.CfClient.Routes.ListAll(context.Background(), &client.RouteListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
+										fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get routes: %s", err)))
+									} else {
+										routesPerc := 100 * len(routes) / routesQuota
+										routesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
+										if routesPerc > 80 {
+											routesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
+										}
+										table.Add("routes", fmt.Sprintf("%5d", len(routes)), "        -", fmt.Sprintf("%5d", routesQuota), routesPercColored)
+									}
+
+									table.Add("memory", fmt.Sprintf("%5s", getFormattedUnit(totalMemoryUsed*1024*1024)), fmt.Sprintf("%10s", getFormattedUnit(totalMemory*1024*1024)), fmt.Sprintf("%5s", getFormattedUnit(memQuota*1024*1024)), memPercColored)
+									table.Add("log_rate", fmt.Sprintf("%5s", getFormattedUnit(totalLogUsed)), fmt.Sprintf("%10s", getFormattedUnit(totalLog)), fmt.Sprintf("%5s", getFormattedUnit(logQuota)), logPercColored)
+
+								}
+							} else {
+								fmt.Printf("No space quota found for space %s\n", terminal.EntityNameColor(conf.CurrentSpace.Name))
+							}
+						}
+						_ = table.PrintTo(os.Stdout)
+					}
+				}
+			}
 		}
 	}
 }
 
 /** getTotals - Get all totals for the apps in the space, like total # of apps and total memory usage. */
 func getTotals(colNames []string) string {
-	for _, process := range processListResponse.Resources {
+	for _, process := range processes {
 		if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
 			if !(process.Type == "task" && process.Instances == 0) {
 				totalApps++
 				if appData[process.Relationships.App.Data.GUID].State == "STARTED" {
 					totalInstances = totalInstances + process.Instances
 					totalAppsStarted++
-					totalMemory = totalMemory + process.MemoryInMb*process.Instances
-					totalDisk = totalDisk + process.DiskInMb*process.Instances
-					totalLog = totalLog + process.LogRateBPS*process.Instances
-					for _, stat := range processStats[process.GUID].Resources {
+					totalMemory = totalMemory + process.MemoryInMB*process.Instances
+					totalDisk = totalDisk + process.DiskInMB*process.Instances
+					totalLog = totalLog + process.LogRateLimitInBytesPerSecond*process.Instances
+					for _, stat := range processStats[process.GUID].Stats {
 						totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
 						totalLogUsed = totalLogUsed + stat.Usage.LogRate
-						totalMemoryUsed = totalMemoryUsed + stat.Usage.Mem/1024/1024
+						totalMemoryUsed = totalMemoryUsed + stat.Usage.Memory/1024/1024
 						totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
 					}
 				}
@@ -379,11 +341,11 @@ func getRequestedColNames() []string {
 }
 
 /** - getColValue - Get the value of the given column.*/
-func getColValue(process model.Process, colName string) string {
+func getColValue(process *resource.Process, colName string) string {
 	var column string
 	// per app instance columns
 	if isInstanceColumn(colName) {
-		for statsIndex, stats := range processStats[process.GUID].Resources {
+		for statsIndex, stats := range processStats[process.GUID].Stats {
 			if appData[process.Relationships.App.Data.GUID].State != "STOPPED" {
 				switch colName {
 				case colIx:
@@ -394,8 +356,8 @@ func getColValue(process model.Process, colName string) string {
 					column = fmt.Sprintf("%s%5.1f\n", column, stats.Usage.CPU*100)
 				case colMemUsed:
 					// calculate and color the memory used percentage
-					usedMem := stats.Usage.Mem / 1024 / 1024
-					memPercent := 100 * usedMem / process.MemoryInMb
+					usedMem := stats.Usage.Memory / 1024 / 1024
+					memPercent := 100 * usedMem / process.MemoryInMB
 					memPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
 					if memPercent < 25 {
 						memPercentColored = terminal.AdvisoryColor(fmt.Sprintf("%2s", strconv.Itoa(memPercent)))
@@ -407,7 +369,7 @@ func getColValue(process model.Process, colName string) string {
 				case colDiskUsed:
 					// calculate and color the memory used percentage
 					usedDisk := stats.Usage.Disk / 1024 / 1024
-					diskPercent := 100 * usedDisk / process.DiskInMb
+					diskPercent := 100 * usedDisk / process.DiskInMB
 					diskPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(diskPercent)))
 					if diskPercent < 25 {
 						diskPercentColored = terminal.AdvisoryColor(fmt.Sprintf("%2s", strconv.Itoa(diskPercent)))
@@ -419,10 +381,10 @@ func getColValue(process model.Process, colName string) string {
 				case colLogRateUsed:
 					// calculate and color the log used percentage
 					usedLog := stats.Usage.LogRate
-					if process.LogRateBPS == -1 || process.LogRateBPS == 0 { // unlimited or undefined log rate
+					if process.LogRateLimitInBytesPerSecond == -1 || process.LogRateLimitInBytesPerSecond == 0 { // unlimited or undefined log rate
 						column = fmt.Sprintf("%s%6s\n", column, getFormattedUnit(usedLog))
 					} else {
-						logPercent := 100 * usedLog / process.LogRateBPS
+						logPercent := 100 * usedLog / process.LogRateLimitInBytesPerSecond
 						logPercentColored := terminal.SuccessColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
 						if logPercent > 80 {
 							logPercentColored = terminal.FailureColor(fmt.Sprintf("%2s", strconv.Itoa(logPercent)))
@@ -450,7 +412,7 @@ func getColValue(process model.Process, colName string) string {
 				case colInstancePorts:
 					var instancePorts []string
 					for _, port := range stats.InstancePorts {
-						instancePorts = append(instancePorts, fmt.Sprintf("%d", port.Internal))
+						instancePorts = append(instancePorts, fmt.Sprintf("%d", port))
 					}
 					column = fmt.Sprintf("%s%s\n", column, strings.Join(instancePorts, ","))
 				}
@@ -470,11 +432,11 @@ func getColValue(process model.Process, colName string) string {
 				return terminal.SuccessColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
 			}
 		case colMemory:
-			return fmt.Sprintf("%6s", getFormattedUnit(process.MemoryInMb*1024*1024))
+			return fmt.Sprintf("%6s", getFormattedUnit(process.MemoryInMB*1024*1024))
 		case colLogRate:
-			return fmt.Sprintf("%6s", getFormattedUnit(process.LogRateBPS))
+			return fmt.Sprintf("%6s", getFormattedUnit(process.LogRateLimitInBytesPerSecond))
 		case colDisk:
-			return fmt.Sprintf("%6s", getFormattedUnit(process.DiskInMb*1024*1024))
+			return fmt.Sprintf("%6s", getFormattedUnit(process.DiskInMB*1024*1024))
 		case colType:
 			return fmt.Sprintf("%4s", process.Type)
 		case colInstances:
@@ -484,21 +446,21 @@ func getColValue(process model.Process, colName string) string {
 		case colUpdated:
 			return appData[process.Relationships.App.Data.GUID].UpdatedAt.Format(time.RFC3339)
 		case colBuildpacks:
-			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.Data.Buildpacks, ",")
+			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.BuildpackData.Buildpacks, ",")
 		case colStack:
-			return appData[process.Relationships.App.Data.GUID].Lifecycle.Data.Stack
+			return appData[process.Relationships.App.Data.GUID].Lifecycle.BuildpackData.Stack
 		case colHealthCheck:
 			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:
 			var invocTmoutStr = "-"
 			if invocTmout := process.HealthCheck.Data.InvocationTimeout; invocTmout != nil {
-				invocTmoutStr = fmt.Sprintf("%v", process.HealthCheck.Data.InvocationTimeout.(float64))
+				invocTmoutStr = fmt.Sprintf("%v", process.HealthCheck.Data.InvocationTimeout)
 			}
 			return invocTmoutStr
 		case colHealthCheckTimeout:
 			var tmoutStr = "-"
 			if tmout := process.HealthCheck.Data.Timeout; tmout != nil {
-				tmoutStr = fmt.Sprintf("%v", process.HealthCheck.Data.Timeout.(float64))
+				tmoutStr = fmt.Sprintf("%v", process.HealthCheck.Data.Timeout)
 			}
 			return tmoutStr
 		}
@@ -520,10 +482,9 @@ func isInstanceColumn(name string) bool {
 }
 
 /** getProcessStats - Iterate over all processes and get the stats from them (concurrently) */
-func getProcessStats(processListResponse model.ProcessesListResponse) map[string]model.ProcessStatsResponse {
-	processStats = make(map[string]model.ProcessStatsResponse)
+func getProcessStats(processes []*resource.Process) map[string]*resource.ProcessStats {
 	concurrencyCounterP = &concurrencyCounter
-	for _, process := range processListResponse.Resources {
+	for _, process := range processes {
 		if conf.AppNameRegex.MatchString(appData[process.Relationships.App.Data.GUID].Name) {
 			if !(process.Type == "task" && process.Instances == 0) {
 				atomic.AddInt32(concurrencyCounterP, 1)
@@ -544,25 +505,17 @@ func getProcessStats(processListResponse model.ProcessesListResponse) map[string
 	return processStats
 }
 
-/** getProcessStat - Perform an http request to get the stats. This function is called concurrently. */
-func getProcessStat(process model.Process) {
+/** getProcessStat - Perform a http request to get the stats. This function is called concurrently. */
+func getProcessStat(process *resource.Process) {
 	defer atomic.AddInt32(concurrencyCounterP, -1)
-	requestUrl, _ := url.Parse(process.Links.Stats.Href)
-	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	resp, err := httpClient.Do(&httpRequest)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
+	if stat, err := conf.CfClient.Processes.GetStats(conf.CfCtx, process.GUID); err != nil {
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get process stats: %s", err)))
 		os.Exit(1)
+	} else {
+		processMutex.Lock()
+		processStats[process.GUID] = stat
+		processMutex.Unlock()
 	}
-	body, _ := io.ReadAll(resp.Body)
-	processesStatsResponse := model.ProcessStatsResponse{}
-	err = json.Unmarshal(body, &processesStatsResponse)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-	}
-	processMutex.Lock()
-	processStats[process.GUID] = processesStatsResponse
-	processMutex.Unlock()
 }
 
 /** getFormattedUnit - Transform the input (integer) to a string formatted in K, M or G */

@@ -25,8 +25,10 @@ If you specify one ore more of these columns, you will get data for each instanc
 
 To get all columns (you need a wide screen), specify: **CF_COLS=ALL**
 
-**For "cf aa":**  
+**For all:**
 -q --hide-headers  Hide the column headers (handy for processing the output).
+
+**For "cf aa":**  
 -u --show-quota-usage Show the quota and quota usage for the current space.
 
 **For "cf lr":**  

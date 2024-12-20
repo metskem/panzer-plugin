@@ -2,22 +2,17 @@ package conf
 
 import (
 	pluginmodels "code.cloudfoundry.org/cli/plugin/models"
+	"context"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"regexp"
 )
 
-const (
-	DefaultHttpTimeout = 60
-)
-
 var (
 	CfClient                  *client.Client
+	CfCtx                     = context.Background()
 	CurrentOrg                pluginmodels.Organization
 	CurrentSpace              pluginmodels.Space
 	CurrentUser               string
-	SkipSSLValidation         bool
-	AccessToken               string
-	ApiEndpoint               string
 	FlagLimit                 = 500
 	FlagFilterEventTargetName string
 	FlagFilterEventTargetType string

@@ -6,10 +6,11 @@ import (
 	"code.cloudfoundry.org/cli/plugin"
 	"code.cloudfoundry.org/cli/util/configv3"
 	"fmt"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github/metskem/panzer-plugin/conf"
 	"github/metskem/panzer-plugin/event"
 	"github/metskem/panzer-plugin/version"
-	"net/http"
 	"os"
 )
 
@@ -19,9 +20,6 @@ const (
 )
 
 var (
-	requestHeader http.Header
-	httpClient    http.Client
-
 	ListAppsUsage   = fmt.Sprintf("aa [-a appname-filter] [-q] [-u], use \"cf aa -help\" for full help message - Use the envvar CF_COLS to specify the output columns, available columns are (comma separated): %s", ValidColumns)
 	ListRoutesUsage = "lr [-t] <-r host-to-lookup>, use \"cf lr -help\" for full help message- Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 )
@@ -39,6 +37,19 @@ type PanzerPlugin struct{}
 // The CLI will exit 0 if the plugin exits 0 and will exit 1 should the plugin exits nonzero.
 func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	preCheck(cliConnection)
+	cfHomeDir := os.Getenv("CF_HOME")
+	if cfHomeDir == "" {
+		cfHomeDir = os.Getenv("HOME")
+	}
+	if cfConfig, err := config.NewFromCFHomeDir(cfHomeDir); err != nil {
+		fmt.Printf("failed to create new config: %s", err)
+		os.Exit(1)
+	} else {
+		if conf.CfClient, err = client.New(cfConfig); err != nil {
+			fmt.Printf("failed to create new cf client: %s\n", err)
+			os.Exit(1)
+		}
+	}
 	switch args[0] {
 	case "aa":
 		checkTarget(cliConnection)
@@ -88,30 +99,17 @@ func checkTarget(cliConnection plugin.CliConnection) {
 
 // preCheck Does all common validations, like being logged in.
 func preCheck(cliConnection plugin.CliConnection) {
-	config, _ := configv3.LoadConfig()
-	i18n.T = i18n.Init(config)
+	v3Config, _ := configv3.LoadConfig()
+	i18n.T = i18n.Init(v3Config)
 	loggedIn, err := cliConnection.IsLoggedIn()
 	if err != nil || !loggedIn {
 		fmt.Println(terminal.NotLoggedInText())
 		os.Exit(1)
 	}
 	conf.CurrentUser, _ = cliConnection.Username()
-
-	if conf.AccessToken, err = cliConnection.AccessToken(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	if conf.ApiEndpoint, err = cliConnection.ApiEndpoint(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	if conf.SkipSSLValidation, err = cliConnection.IsSSLDisabled(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 }
 
-// Unlike most Go programs, the `Main()` function will not be used to run all of the commands provided in your plugin.
+// Unlike most Go programs, the `Main()` function will not be used to run all the commands provided in your plugin.
 // Main will be used to initialize the plugin process, as well as any dependencies you might require for your plugin.
 func main() {
 	// Any initialization for your plugin can be handled here

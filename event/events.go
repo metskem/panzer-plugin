@@ -3,19 +3,14 @@ package event
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/integrii/flaggy"
 	"github/metskem/panzer-plugin/conf"
-	"github/metskem/panzer-plugin/model"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
-	"time"
 )
 
 const (
@@ -28,17 +23,17 @@ var (
 	colNames        = []string{"timestamp", "event-type", "target-name", "target-type", "actor"}
 )
 
-type EventList []model.Event
+type AuditEventList []*resource.AuditEvent
 
-func (list EventList) Len() int {
+func (list AuditEventList) Len() int {
 	return len(list)
 }
 
-func (list EventList) Less(i, j int) bool {
+func (list AuditEventList) Less(i, j int) bool {
 	return list[i].CreatedAt.Before(list[j].CreatedAt)
 }
 
-func (list EventList) Swap(i, j int) {
+func (list AuditEventList) Swap(i, j int) {
 	list[i], list[j] = list[j], list[i]
 }
 
@@ -60,27 +55,21 @@ func GetEvents(cliConnection plugin.CliConnection) {
 		fmt.Printf("Output limited to 5000 rows\n")
 		conf.FlagLimit = 5000
 	}
+	if conf.FlagLimit == 0 {
+		conf.FlagLimit = 500
+	}
 
-	var httpClient http.Client
-	var requestHeader http.Header
 	if !conf.FlagHideHeaders {
 		fmt.Printf("Getting events as %s...\n\n", terminal.EntityNameColor(conf.CurrentUser))
 	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
-	httpClient = http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
-	requestHeader = map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
-
 	// handle the serverside filters. You can specify one or both of orgname and spacename.
-	serverSideFilter := ""
 	var orgGuid, spaceGuid string
 	if conf.FlagFilterEventOrgName != "" {
 		if conf.FlagFilterEventSpaceName != "" {
 			orgGuid = getOrgGuid(conf.FlagFilterEventOrgName)
 			spaceGuid = getSpaceGuid(orgGuid, conf.FlagFilterEventSpaceName)
-			serverSideFilter = fmt.Sprintf("&space_guids=%s", spaceGuid)
 		} else {
 			orgGuid = getOrgGuid(conf.FlagFilterEventOrgName)
-			serverSideFilter = fmt.Sprintf("&organization_guids=%s", orgGuid)
 		}
 	} else {
 		if conf.FlagFilterEventSpaceName != "" {
@@ -89,108 +78,77 @@ func GetEvents(cliConnection plugin.CliConnection) {
 				os.Exit(1)
 			} else {
 				spaceGuid = getSpaceGuid(currentOrg.Guid, conf.FlagFilterEventSpaceName)
-				serverSideFilter = fmt.Sprintf("&space_guids=%s", spaceGuid)
 			}
 		}
-	}
-	if conf.FlagFilterEventTypes != "" {
-		serverSideFilter = fmt.Sprintf("%s&types=%s", serverSideFilter, conf.FlagFilterEventTypes)
 	}
 
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/audit_events?per_page=%d&order_by=-created_at%s", conf.ApiEndpoint, conf.FlagLimit, serverSideFilter))
-	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	resp, err := httpClient.Do(&httpRequest)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed response: %s", err)))
+	var types, orgGuids, spaceGuids client.Filter
+	if conf.FlagFilterEventTypes != "" {
+		types = client.Filter{Values: strings.Split(conf.FlagFilterEventTypes, ",")}
+	}
+	if conf.FlagFilterEventOrgName != "" {
+		orgGuids = client.Filter{Values: []string{orgGuid}}
+	}
+	if conf.FlagFilterEventSpaceName != "" {
+		spaceGuids = client.Filter{Values: []string{spaceGuid}}
+	}
+	auditListOptions := client.AuditEventListOptions{
+		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at"},
+		Types:             types,
+		OrganizationGUIDs: orgGuids,
+		SpaceGUIDs:        spaceGuids,
+	}
+	if events, _, err := conf.CfClient.AuditEvents.List(conf.CfCtx, &auditListOptions); err != nil {
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get audit events: %s", err)))
 		os.Exit(1)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	eventsListResponse := model.EventsListResponse{}
-	err = json.Unmarshal(body, &eventsListResponse)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse audit_events response: %s", err)))
-	}
-	if len(eventsListResponse.Resources) == 0 {
-		fmt.Println("no audit_events found")
 	} else {
-		table := terminal.NewTable(colNames)
-		if conf.FlagHideHeaders {
-			table.NoHeaders()
-		}
-		var eventList EventList
-		eventList = eventsListResponse.Resources
-		sort.Sort(eventList)
-		for _, event := range eventList {
-			if strings.Contains(event.Target.Name, conf.FlagFilterEventTargetName) && strings.Contains(event.Target.Type, conf.FlagFilterEventTargetType) && strings.Contains(event.Actor.Name, conf.FlagFilterEventActor) {
-				var colValues [5]string
-				colValues[0] = event.CreatedAt.Local().Format(timeFormat)
-				colValues[1] = event.Type
-				if event.Target.Name == "" {
-					colValues[2] = "<N/A>"
-				} else {
-					colValues[2] = event.Target.Name
-				}
-				colValues[3] = event.Target.Type
-				colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, event.Actor.Name)
-				table.Add(colValues[:]...)
+		if len(events) == 0 {
+			fmt.Println("no audit_events found")
+		} else {
+			table := terminal.NewTable(colNames)
+			if conf.FlagHideHeaders {
+				table.NoHeaders()
 			}
+			var eventList AuditEventList
+			eventList = events
+			sort.Sort(eventList)
+			for _, event := range eventList {
+				if strings.Contains(event.Target.Name, conf.FlagFilterEventTargetName) && strings.Contains(event.Target.Type, conf.FlagFilterEventTargetType) && strings.Contains(event.Actor.Name, conf.FlagFilterEventActor) {
+					var colValues [5]string
+					colValues[0] = event.CreatedAt.Local().Format(timeFormat)
+					colValues[1] = event.Type
+					if event.Target.Name == "" {
+						colValues[2] = "<N/A>"
+					} else {
+						colValues[2] = event.Target.Name
+					}
+					colValues[3] = event.Target.Type
+					colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, event.Actor.Name)
+					table.Add(colValues[:]...)
+				}
+			}
+			_ = table.PrintTo(os.Stdout)
 		}
-		_ = table.PrintTo(os.Stdout)
 	}
 }
 
 // getOrgGuid - Get the organization guid, given the organization name. Will os.Exit if it fails to find it.
 func getOrgGuid(orgName string) string {
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
-	httpClient := http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
-	requestHeader := map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
-	//
-	// get the /v3/apps data first
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/organizations?names=%s", conf.ApiEndpoint, orgName))
-	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	resp, err := httpClient.Do(&httpRequest)
+	org, err := conf.CfClient.Organizations.Single(conf.CfCtx, &client.OrganizationListOptions{ListOptions: &client.ListOptions{}, Names: client.Filter{Values: []string{orgName}}})
 	if err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get org by name (%s): %s", orgName, err)))
 		os.Exit(1)
 	}
-	body, _ := io.ReadAll(resp.Body)
-	orgsListResponse := model.OrgsListResponse{}
-	err = json.Unmarshal(body, &orgsListResponse)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-	}
-
-	if len(orgsListResponse.Resources) == 0 {
-		fmt.Printf("Org %s not found\n", orgName)
-		os.Exit(1)
-	}
-	return orgsListResponse.Resources[0].GUID
+	return org.GUID
 }
 
 // getSpaceGuid - Get the space guid, given the organization guid and space name. Will os.Exit if it fails to find it.
 func getSpaceGuid(orgGuid, spaceName string) string {
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.SkipSSLValidation}}
-	httpClient := http.Client{Transport: transport, Timeout: time.Duration(conf.DefaultHttpTimeout) * time.Second}
-	requestHeader := map[string][]string{"Content-Type": {"application/json"}, "Authorization": {conf.AccessToken}}
-	//
-	// get the /v3/apps data first
-	requestUrl, _ := url.Parse(fmt.Sprintf("%s/v3/spaces?names=%s&organization_guids=%s", conf.ApiEndpoint, spaceName, orgGuid))
-	httpRequest := http.Request{Method: http.MethodGet, URL: requestUrl, Header: requestHeader}
-	resp, err := httpClient.Do(&httpRequest)
+	spaceListOptions := client.SpaceListOptions{ListOptions: &client.ListOptions{}, OrganizationGUIDs: client.Filter{Values: []string{orgGuid}}, Names: client.Filter{Values: []string{spaceName}}}
+	space, err := conf.CfClient.Spaces.Single(conf.CfCtx, &spaceListOptions)
 	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space by name (%s) and orgGuid (%s): %s", spaceName, orgGuid, err)))
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get space by name (%s): %s", spaceName, err)))
 		os.Exit(1)
 	}
-	body, _ := io.ReadAll(resp.Body)
-	spacesListResponse := model.SpacesListResponse{}
-	err = json.Unmarshal(body, &spacesListResponse)
-	if err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to parse response: %s", err)))
-	}
-
-	if len(spacesListResponse.Resources) == 0 {
-		fmt.Printf("Space %s not found in current org\n", spaceName)
-		os.Exit(1)
-	}
-	return spacesListResponse.Resources[0].GUID
+	return space.GUID
 }
