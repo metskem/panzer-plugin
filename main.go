@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
-	"github/metskem/panzer-plugin/conf"
-	"github/metskem/panzer-plugin/event"
-	"github/metskem/panzer-plugin/version"
+	"github.com/metskem/panzer-plugin/conf"
+	"github.com/metskem/panzer-plugin/event"
+	"github.com/metskem/panzer-plugin/version"
 	"os"
 )
 

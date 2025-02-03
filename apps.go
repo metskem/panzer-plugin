@@ -8,7 +8,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/integrii/flaggy"
-	"github/metskem/panzer-plugin/conf"
+	"github.com/metskem/panzer-plugin/conf"
 	"os"
 	"regexp"
 	"sort"

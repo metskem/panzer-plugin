@@ -26,6 +26,7 @@ jobs:
       - name: Build panzer-plugin
         env:
           COMMIT: ${{ github.sha }}
+          VERSION: ${{ env.VERSION }}
         run: .github/scripts/build.sh
       - name: upload panzer-plugin
         uses: actions/upload-artifact@v4

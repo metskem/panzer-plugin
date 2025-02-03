@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/integrii/flaggy"
-	"github/metskem/panzer-plugin/conf"
+	"github.com/metskem/panzer-plugin/conf"
 	"os"
 	"os/exec"
 )
