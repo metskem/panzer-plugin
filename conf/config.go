@@ -25,5 +25,8 @@ var (
 	FlagAppName               string
 	FlagHideHeaders           bool
 	FlagShowQuotaUsage        bool
+	FlagTimeBefore            string
+	FlagTimeAfter             string
+	FlagIncludeEventData      bool
 	AppNameRegex              regexp.Regexp
 )

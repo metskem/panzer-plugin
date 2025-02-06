@@ -3,14 +3,17 @@ package event
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
+	"encoding/json"
 	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/integrii/flaggy"
 	"github.com/metskem/panzer-plugin/conf"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -19,9 +22,41 @@ const (
 )
 
 var (
-	ListEventsUsage = "ev - List recent audit events, use \"cf ev -help\" for full help message"
-	colNames        = []string{"timestamp", "event-type", "target-name", "target-type", "actor"}
+	ListEventsUsage  = "ev - List recent audit events, use \"cf ev -help\" for full help message"
+	colNames         = []string{"timestamp", "event-type", "target-name", "target-type", "actor", "data"}
+	beforeTime       time.Time
+	afterTime        time.Time
+	TypeAppCreate    = "audit.app.create"
+	TypeProcessCrash = "audit.app.process.crash"
+	TypeProcessReady = "audit.app.process.ready"
 )
+
+type DataProcessCrashEvent struct {
+	Instance        string `json:"instance"`
+	Index           int    `json:"index"`
+	CellId          string `json:"cell_id"`
+	Reason          string `json:"reason"`
+	ExitDescription string `json:"exit_description"`
+	CrashCount      int    `json:"crash_count"`
+	CrashTimestamp  int64  `json:"crash_timestamp"`
+}
+
+type DataProcessReadyEvent struct {
+	Instance string `json:"instance"`
+	Index    int    `json:"index"`
+	CellId   string `json:"cell_id"`
+	Ready    bool   `json:"ready"`
+}
+
+type DataAppCreateEvent struct {
+	Request struct {
+		Lifecycle struct {
+			Data struct {
+				Buildpacks []string `json:"buildpacks"`
+			} `json:"data"`
+		} `json:"lifecycle"`
+	} `json:"request"`
+}
 
 type AuditEventList []*resource.AuditEvent
 
@@ -50,6 +85,9 @@ func GetEvents(cliConnection plugin.CliConnection) {
 	flaggy.String(&conf.FlagFilterEventOrgName, "o", "org", "Filter the output (server side), org name to exactly match the filter")
 	flaggy.String(&conf.FlagFilterEventSpaceName, "s", "space", "Filter the output (server side), space name to exactly match the filter")
 	flaggy.Bool(&conf.FlagHideHeaders, "q", "hide-headers", "Hide the headers of the output (handy for automated processing), default is false")
+	flaggy.String(&conf.FlagTimeBefore, "tb", "time-before", "Filter the output (server side), time before the given time (timeformat: YYYY-MM-DDThh:mm:ssZ)")
+	flaggy.String(&conf.FlagTimeAfter, "ta", "time-after", "Filter the output (server side), time after the given time (timeformat: YYYY-MM-DDThh:mm:ssZ)")
+	flaggy.Bool(&conf.FlagIncludeEventData, "d", "include-data", "Include the event data in the output (requires a lot of space), default is false")
 	flaggy.Parse()
 	if conf.FlagLimit > 5000 {
 		fmt.Printf("Output limited to 5000 rows\n")
@@ -61,6 +99,32 @@ func GetEvents(cliConnection plugin.CliConnection) {
 
 	if !conf.FlagHideHeaders {
 		fmt.Printf("Getting events as %s...\n\n", terminal.EntityNameColor(conf.CurrentUser))
+	}
+
+	var timePatternRegex = regexp.MustCompile("^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})Z$")
+	if conf.FlagTimeBefore != "" {
+		if timePatternRegex.MatchString(conf.FlagTimeBefore) {
+			var err error
+			if beforeTime, err = time.Parse(timeFormat+"Z", conf.FlagTimeBefore); err != nil {
+				fmt.Printf("failed to parse time %s: %s\n", conf.FlagTimeBefore, err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("invalid time format: %s\n", conf.FlagTimeBefore)
+			os.Exit(1)
+		}
+	}
+	if conf.FlagTimeAfter != "" {
+		if timePatternRegex.MatchString(conf.FlagTimeAfter) {
+			var err error
+			if afterTime, err = time.Parse(timeFormat+"Z", conf.FlagTimeAfter); err != nil {
+				fmt.Printf("failed to parse time %s: %s\n", conf.FlagTimeAfter, err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("invalid time format: %s\n", conf.FlagTimeAfter)
+			os.Exit(1)
+		}
 	}
 	// handle the serverside filters. You can specify one or both of orgname and spacename.
 	var orgGuid, spaceGuid string
@@ -92,12 +156,21 @@ func GetEvents(cliConnection plugin.CliConnection) {
 	if conf.FlagFilterEventSpaceName != "" {
 		spaceGuids = client.Filter{Values: []string{spaceGuid}}
 	}
+
+	var createdAts, updatedAts client.TimestampFilter
+	if conf.FlagTimeAfter != "" {
+		createdAts = client.TimestampFilter{Timestamp: []time.Time{afterTime}, Operator: client.FilterModifierGreaterThan}
+	}
+	if conf.FlagTimeBefore != "" {
+		updatedAts = client.TimestampFilter{Timestamp: []time.Time{beforeTime}, Operator: client.FilterModifierLessThan}
+	}
+
 	auditListOptions := client.AuditEventListOptions{
-		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at"},
+		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at", CreateAts: createdAts, UpdatedAts: updatedAts},
 		Types:             types,
 		OrganizationGUIDs: orgGuids,
-		SpaceGUIDs:        spaceGuids,
-	}
+		SpaceGUIDs:        spaceGuids}
+
 	if events, _, err := conf.CfClient.AuditEvents.List(conf.CfCtx, &auditListOptions); err != nil {
 		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get audit events: %s", err)))
 		os.Exit(1)
@@ -114,7 +187,7 @@ func GetEvents(cliConnection plugin.CliConnection) {
 			sort.Sort(eventList)
 			for _, event := range eventList {
 				if strings.Contains(event.Target.Name, conf.FlagFilterEventTargetName) && strings.Contains(event.Target.Type, conf.FlagFilterEventTargetType) && strings.Contains(event.Actor.Name, conf.FlagFilterEventActor) {
-					var colValues [5]string
+					var colValues [6]string
 					colValues[0] = event.CreatedAt.Local().Format(timeFormat)
 					colValues[1] = event.Type
 					if event.Target.Name == "" {
@@ -124,6 +197,33 @@ func GetEvents(cliConnection plugin.CliConnection) {
 					}
 					colValues[3] = event.Target.Type
 					colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, event.Actor.Name)
+					colValues[5] = "-"
+					if conf.FlagIncludeEventData {
+						if event.Type == TypeProcessCrash {
+							var processCrashData DataProcessCrashEvent
+							if err = json.Unmarshal(*event.Data, &processCrashData); err != nil {
+								fmt.Printf("failed to unmarshal process crash data: %s\n", err)
+							} else {
+								colValues[5] = fmt.Sprintf("index: %d, cell_id: %s, crash_count: %d, exit_description: %s", processCrashData.Index, processCrashData.CellId, processCrashData.CrashCount, processCrashData.ExitDescription)
+							}
+						}
+						if event.Type == TypeProcessReady {
+							var processReadyData DataProcessReadyEvent
+							if err = json.Unmarshal(*event.Data, &processReadyData); err != nil {
+								fmt.Printf("failed to unmarshal process ready data: %s\n", err)
+							} else {
+								colValues[5] = fmt.Sprintf("index: %d, cell_id: %s", processReadyData.Index, processReadyData.CellId)
+							}
+						}
+						if event.Type == TypeAppCreate {
+							var appCreateData DataAppCreateEvent
+							if err = json.Unmarshal(*event.Data, &appCreateData); err != nil {
+								fmt.Printf("failed to unmarshal app create data: %s\n", err)
+							} else {
+								colValues[5] = fmt.Sprintf("buildpacks: %s", strings.Join(appCreateData.Request.Lifecycle.Data.Buildpacks, ","))
+							}
+						}
+					}
 					table.Add(colValues[:]...)
 				}
 			}

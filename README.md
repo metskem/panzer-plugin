@@ -38,14 +38,18 @@ If you specify the -t flag you will also be cf targeted to the org/space where t
 **For "cf ev":**  
 You can filter the output by optionally specifying one or more of the following flags:
 
-    -h --help          Displays help with available flag, subcommand, and positional value parameters.
-    -l --limit         Limit the output to max XXX events (default: 500)
-    -e --event-type    Filter the output (server side), (comma separated list of) event type to exactly match the filter (i.e. audit.app.update,app.crash)
-    -n --target-name   Filter the output (client side), target name to fuzzy match the filter
-    -t --target-type   Filter the output (client side), target type to fuzzy match the filter (i.e. app service_binding route)
-    -a --actor         Filter the output (client side), actor name to fuzzy match the filter
-    -o --org           Filter the output (server side), org name to exactly match the filter
-    -s --space         Filter the output (server side), space name to exactly match the filter
+    -h --help           Displays help with available flag, subcommand, and positional value parameters.
+    -l --limit          Limit the output to max XXX events (default: 500)
+    -e --event-type     Filter the output (server side), (comma separated list of) event type to exactly match the filter (i.e. audit.app.update,app.crash)
+    -n --target-name    Filter the output (client side), target name to fuzzy match the filter
+    -t --target-type    Filter the output (client side), target type to fuzzy match the filter (i.e. app service_binding route)
+    -a --actor          Filter the output (client side), actor name to fuzzy match the filter
+    -o --org            Filter the output (server side), org name to exactly match the filter
+    -s --space          Filter the output (server side), space name to exactly match the filter
+    -q --hide-headers   Hide the headers of the output (handy for automated processing), default is false
+    -tb --time-before    Filter the output (server side), time before the given time (timeformat: YYYY-MM-DDThh:mm:ssZ)
+    -ta --time-after     Filter the output (server side), time after the given time (timeformat: YYYY-MM-DDThh:mm:ssZ)
+    -d --include-data   Include the event data in the output (requires a lot of space), default is false
 
 An example to use all filters:  `cf ev --limit 4381 --event-type audit.app.stop --target-name testapp --target-type route --actor user4711 --org my-org --space my-space`
 
