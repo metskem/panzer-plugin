@@ -249,11 +249,13 @@ func getTotals(colNames []string) string {
 					totalMemory = totalMemory + process.MemoryInMB*process.Instances
 					totalDisk = totalDisk + process.DiskInMB*process.Instances
 					totalLog = totalLog + process.LogRateLimitInBytesPerSecond*process.Instances
-					for _, stat := range processStats[process.GUID].Stats {
-						totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
-						totalLogUsed = totalLogUsed + stat.Usage.LogRate
-						totalMemoryUsed = totalMemoryUsed + stat.Usage.Memory/1024/1024
-						totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
+					if processStats[process.GUID] != nil {
+						for _, stat := range processStats[process.GUID].Stats {
+							totalDiskUsed = totalDiskUsed + stat.Usage.Disk/1024/1024
+							totalLogUsed = totalLogUsed + stat.Usage.LogRate
+							totalMemoryUsed = totalMemoryUsed + stat.Usage.Memory/1024/1024
+							totalCpuUsed = totalCpuUsed + stat.Usage.CPU*100
+						}
 					}
 				}
 			}
