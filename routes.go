@@ -2,6 +2,7 @@ package main
 
 import (
 	"code.cloudfoundry.org/cli/cf/terminal"
+	"code.cloudfoundry.org/cli/plugin"
 	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/integrii/flaggy"
@@ -13,7 +14,7 @@ import (
 var colNames = []string{"hostname", "domain", "org", "space", "bound apps"}
 
 /** listRoutes - The main function to produce the response to list routes. */
-func listRoutes() {
+func listRoutes(cliConnection plugin.CliConnection) {
 	flaggy.DefaultParser.ShowHelpOnUnexpected = false
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	flaggy.Bool(&conf.FlagSwitchToSpace, "t", "target", "cf target the space where the route is found")
@@ -56,10 +57,12 @@ func listRoutes() {
 			}
 			_ = table.PrintTo(os.Stdout)
 			if conf.FlagSwitchToSpace {
-				// You normally would use cliConnection.CliCommand, but that screws up my "NetworkPolicyV1Endpoint" in my cf config.json. So instead issue os command:
-				cmd := exec.Command("cf", "target", "-o", orgName, "-s", spaceName)
-				if err = cmd.Run(); err != nil {
-					fmt.Printf("failed to set target to org %s and space %s: %s", orgName, spaceName, err)
+				if _, err = cliConnection.CliCommandWithoutTerminalOutput("target", "-o", orgName, "-s", spaceName); err != nil {
+					// You normally would use cliConnection.CliCommand, but that screws up my "NetworkPolicyV1Endpoint" in my cf config.json. So instead issue os command:
+					cmd := exec.Command("cf", "target", "-o", orgName, "-s", spaceName)
+					if err = cmd.Run(); err != nil {
+						fmt.Printf("failed to set target to org %s and space %s: %s", orgName, spaceName, err)
+					}
 				}
 			}
 		}

@@ -55,7 +55,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 		checkTarget(cliConnection)
 		listApps(cliConnection)
 	case "lr":
-		listRoutes()
+		listRoutes(cliConnection)
 	case "ev":
 		event.GetEvents(cliConnection)
 	}
