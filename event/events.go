@@ -157,16 +157,17 @@ func GetEvents(cliConnection plugin.CliConnection) {
 		spaceGuids = client.Filter{Values: []string{spaceGuid}}
 	}
 
-	var createdAts, updatedAts client.TimestampFilter
+	var createdAfter, createdBefore client.TimestampFilter
 	if conf.FlagTimeAfter != "" {
-		createdAts = client.TimestampFilter{Timestamp: []time.Time{afterTime}, Operator: client.FilterModifierGreaterThan}
+		createdAfter = client.TimestampFilter{Timestamp: []time.Time{afterTime}, Operator: client.FilterModifierGreaterThan}
 	}
 	if conf.FlagTimeBefore != "" {
-		updatedAts = client.TimestampFilter{Timestamp: []time.Time{beforeTime}, Operator: client.FilterModifierLessThan}
+		createdBefore = client.TimestampFilter{Timestamp: []time.Time{beforeTime}, Operator: client.FilterModifierLessThan}
 	}
+	timeStampFilterList := client.TimestampFilterList{createdAfter, createdBefore}
 
 	auditListOptions := client.AuditEventListOptions{
-		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at", CreateAts: createdAts, UpdatedAts: updatedAts},
+		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at", CreateAts: timeStampFilterList},
 		Types:             types,
 		OrganizationGUIDs: orgGuids,
 		SpaceGUIDs:        spaceGuids}
