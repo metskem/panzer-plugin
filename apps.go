@@ -448,9 +448,9 @@ func getColValue(process *resource.Process, colName string) string {
 		case colUpdated:
 			return appData[process.Relationships.App.Data.GUID].UpdatedAt.Format(time.RFC3339)
 		case colBuildpacks:
-			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.BuildpackData.Buildpacks, ",")
+			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(resource.BuildpackLifecycle).Buildpacks, ",")
 		case colStack:
-			return appData[process.Relationships.App.Data.GUID].Lifecycle.BuildpackData.Stack
+			return appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(resource.BuildpackLifecycle).Stack
 		case colHealthCheck:
 			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:

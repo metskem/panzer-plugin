@@ -167,7 +167,7 @@ func GetEvents(cliConnection plugin.CliConnection) {
 	timeStampFilterList := client.TimestampFilterList{createdAfter, createdBefore}
 
 	auditListOptions := client.AuditEventListOptions{
-		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at", CreateAts: timeStampFilterList},
+		ListOptions:       &client.ListOptions{PerPage: conf.FlagLimit, Page: 1, OrderBy: "-created_at", CreatedAts: timeStampFilterList},
 		Types:             types,
 		OrganizationGUIDs: orgGuids,
 		SpaceGUIDs:        spaceGuids}
@@ -197,7 +197,11 @@ func GetEvents(cliConnection plugin.CliConnection) {
 						colValues[2] = event.Target.Name
 					}
 					colValues[3] = event.Target.Type
-					colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, event.Actor.Name)
+					actorName := event.Actor.Name
+					if event.Actor.Name == "" {
+						actorName = event.Actor.GUID
+					}
+					colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, actorName)
 					colValues[5] = "-"
 					if conf.FlagIncludeEventData {
 						if event.Type == TypeProcessCrash {
