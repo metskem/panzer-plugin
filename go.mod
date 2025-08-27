@@ -11,7 +11,7 @@ replace (
 
 require (
 	code.cloudfoundry.org/cli v7.1.0+incompatible
-	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.13
+	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.14
 	github.com/integrii/flaggy v1.5.2
 )
 
@@ -60,7 +60,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/stretchr/testify v1.11.0 // indirect
 	github.com/tedsuo/rata v1.0.0 // indirect
 	github.com/vito/go-interact v1.0.0 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
