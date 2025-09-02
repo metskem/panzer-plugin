@@ -414,7 +414,9 @@ func getColValue(process *resource.Process, colName string) string {
 				case colInstancePorts:
 					var instancePorts []string
 					for _, port := range stats.InstancePorts {
-						instancePorts = append(instancePorts, fmt.Sprintf("%d", port))
+						if port["external_tls_proxy_port"] != 0 && port["internal"] != 2222 {
+							instancePorts = append(instancePorts, fmt.Sprintf("%d", port["external_tls_proxy_port"]))
+						}
 					}
 					column = fmt.Sprintf("%s%s\n", column, strings.Join(instancePorts, ","))
 				}
