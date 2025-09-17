@@ -3,14 +3,14 @@ module github.com/metskem/panzer-plugin
 go 1.25
 
 replace (
-	golang.org/x/text => golang.org/x/text v0.28.0
+	golang.org/x/text => golang.org/x/text v0.29.0
 	gopkg.in/yaml.v2 => gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
 	code.cloudfoundry.org/cli v7.1.0+incompatible
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.15
-	github.com/integrii/flaggy v1.5.2
+	github.com/integrii/flaggy v1.6.0
 )
 
 require (
