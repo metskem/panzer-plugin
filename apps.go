@@ -450,6 +450,12 @@ func getColValue(process *resource.Process, colName string) string {
 		case colUpdated:
 			return appData[process.Relationships.App.Data.GUID].UpdatedAt.Format(time.RFC3339)
 		case colBuildpacks:
+			if actualType, ok := appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle); ok {
+				return strings.Join(actualType.Buildpacks, ",")
+			}
+			if _, ok := appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.DockerLifecycle); ok {
+				return "<DOCKER>"
+			}
 			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle).Buildpacks, ",")
 		case colStack:
 			return appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle).Stack
