@@ -9,7 +9,7 @@ replace (
 
 require (
 	code.cloudfoundry.org/cli v7.1.0+incompatible
-	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.16
+	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.17
 	github.com/integrii/flaggy v1.8.0
 )
 
