@@ -1,17 +1,18 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"code.cloudfoundry.org/cli/cf/i18n"
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
 	"code.cloudfoundry.org/cli/util/configv3"
-	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/metskem/panzer-plugin/conf"
 	"github.com/metskem/panzer-plugin/event"
 	"github.com/metskem/panzer-plugin/version"
-	"os"
 )
 
 const (
@@ -59,6 +60,7 @@ func (c *PanzerPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	case "ev":
 		event.GetEvents(cliConnection)
 	}
+
 }
 
 // GetMetadata returns a PluginMetadata struct. The first field, Name, determines the name of the plugin which should generally be without spaces.

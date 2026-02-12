@@ -1,14 +1,8 @@
 package main
 
 import (
-	"code.cloudfoundry.org/cli/cf/terminal"
-	"code.cloudfoundry.org/cli/plugin"
 	"context"
 	"fmt"
-	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/integrii/flaggy"
-	"github.com/metskem/panzer-plugin/conf"
 	"os"
 	"regexp"
 	"sort"
@@ -17,6 +11,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"code.cloudfoundry.org/cli/cf/terminal"
+	"code.cloudfoundry.org/cli/plugin"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"github.com/integrii/flaggy"
+	"github.com/metskem/panzer-plugin/conf"
 )
 
 var (
@@ -322,7 +323,7 @@ func getRequestedColNames() []string {
 		}
 		if !isCustomColumnValid {
 			fmt.Println(terminal.FailureColor(fmt.Sprintf("Invalid column in CF_COLS envvar : %s.", customColName)))
-			fmt.Println(fmt.Sprintf("Valid column names are: %s", strings.Join(ValidColumns, ",")))
+			fmt.Printf("Valid column names are: %s", strings.Join(ValidColumns, ","))
 			os.Exit(1)
 		}
 	}
