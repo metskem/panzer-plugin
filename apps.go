@@ -79,11 +79,12 @@ const (
 	colProcType                     = "ProcType"
 	colUptime                       = "Uptime"
 	colInstancePorts                = "InstancePorts"
+	colIsoSeg                       = "IsoSeg"
 )
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts}
-var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colProcType, colUptime, colInstancePorts}
+var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
+var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
 
 /** listApps - The main function to produce the response. */
 func listApps(cliConnection plugin.CliConnection) {
@@ -429,6 +430,10 @@ func getColValue(process *resource.Process, colName string) string {
 						}
 					}
 					column = fmt.Sprintf("%s%s\n", column, strings.Join(instancePorts, ","))
+				case colIsoSeg:
+					if stats.IsolationSegment != nil {
+						column = fmt.Sprintf("%s%s\n", column, strings.ToLower(*stats.IsolationSegment))
+					}
 				}
 			}
 		}
