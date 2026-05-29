@@ -16,6 +16,7 @@ var colNames = []string{"hostname", "domain", "org", "space", "bound apps"}
 
 /** listRoutes - The main function to produce the response to list routes. */
 func listRoutes(cliConnection plugin.CliConnection) {
+	_ = cliConnection // suppress compile warning
 	flaggy.DefaultParser.ShowHelpOnUnexpected = false
 	flaggy.DefaultParser.ShowVersionWithVersionFlag = false
 	flaggy.Bool(&conf.FlagSwitchToSpace, "t", "target", "cf target the space where the route is found")
