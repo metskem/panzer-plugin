@@ -1,14 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/plugin"
-	"fmt"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/integrii/flaggy"
 	"github.com/metskem/panzer-plugin/conf"
-	"os"
-	"os/exec"
 )
 
 var colNames = []string{"hostname", "domain", "org", "space", "bound apps"}
@@ -45,24 +46,26 @@ func listRoutes(cliConnection plugin.CliConnection) {
 				org, _ := conf.CfClient.Organizations.Get(conf.CfCtx, space.Relationships.Organization.Data.GUID)
 				colValues[2] = org.Name
 				colValues[3] = space.Name
-				table.Add(colValues[:]...)
 				orgName = colValues[2]
 				spaceName = colValues[3]
 				var destList string
 				for _, dest := range route.Destinations {
-					app, _ := conf.CfClient.Applications.Get(conf.CfCtx, *dest.App.GUID)
-					destList = fmt.Sprintf("%s%s ", destList, app.Name)
+					if dest.App.GUID != nil {
+						app, err := conf.CfClient.Applications.Get(conf.CfCtx, *dest.App.GUID)
+						if err == nil {
+							destList = fmt.Sprintf("%s%s ", destList, app.Name)
+						}
+					}
 				}
 				colValues[4] = destList
+				table.Add(colValues[:]...)
 			}
 			_ = table.PrintTo(os.Stdout)
 			if conf.FlagSwitchToSpace {
-				if _, err = cliConnection.CliCommandWithoutTerminalOutput("target", "-o", orgName, "-s", spaceName); err != nil {
-					// You normally would use cliConnection.CliCommand, but that screws up my "NetworkPolicyV1Endpoint" in my cf config.json. So instead issue os command:
-					cmd := exec.Command("cf", "target", "-o", orgName, "-s", spaceName)
-					if err = cmd.Run(); err != nil {
-						fmt.Printf("failed to set target to org %s and space %s: %s", orgName, spaceName, err)
-					}
+				// Use os command instead of cliConnection.CliCommand because it screws up "NetworkPolicyV1Endpoint" in cf config.json
+				cmd := exec.Command("cf", "target", "-o", orgName, "-s", spaceName)
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("failed to set target to org %s and space %s: %s", orgName, spaceName, err)
 				}
 			}
 		}

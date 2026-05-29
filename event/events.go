@@ -1,19 +1,20 @@
 package event
 
 import (
-	"code.cloudfoundry.org/cli/cf/terminal"
-	"code.cloudfoundry.org/cli/plugin"
 	"encoding/json"
 	"fmt"
-	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/integrii/flaggy"
-	"github.com/metskem/panzer-plugin/conf"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"code.cloudfoundry.org/cli/cf/terminal"
+	"code.cloudfoundry.org/cli/plugin"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"github.com/integrii/flaggy"
+	"github.com/metskem/panzer-plugin/conf"
 )
 
 const (
@@ -203,7 +204,7 @@ func GetEvents(cliConnection plugin.CliConnection) {
 					}
 					colValues[4] = fmt.Sprintf("%s: %s", event.Actor.Type, actorName)
 					colValues[5] = "-"
-					if conf.FlagIncludeEventData {
+					if conf.FlagIncludeEventData && event.Data != nil {
 						if event.Type == TypeProcessCrash {
 							var processCrashData DataProcessCrashEvent
 							if err = json.Unmarshal(*event.Data, &processCrashData); err != nil {

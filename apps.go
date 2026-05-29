@@ -175,7 +175,7 @@ func listApps(cliConnection plugin.CliConnection) {
 
 									memPerc := 0
 									memQuota := *spaceQuota.Apps.TotalMemoryInMB
-									if totalMemory != 0 {
+									if memQuota != 0 {
 										memPerc = 100 * totalMemory / memQuota
 									}
 									memPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(memPerc)))
@@ -185,7 +185,7 @@ func listApps(cliConnection plugin.CliConnection) {
 
 									logPerc := 0
 									logQuota := *spaceQuota.Apps.LogRateLimitInBytesPerSecond
-									if totalLog != 0 {
+									if logQuota != 0 {
 										logPerc = 100 * totalLog / logQuota
 									}
 									logPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
@@ -193,7 +193,10 @@ func listApps(cliConnection plugin.CliConnection) {
 										logPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(logPerc)))
 									}
 
-									appInstancesPerc := 100 * totalInstances / appInstancesQuota
+									appInstancesPerc := 0
+									if appInstancesQuota != 0 {
+										appInstancesPerc = 100 * totalInstances / appInstancesQuota
+									}
 									appInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
 									if appInstancesPerc > 80 {
 										appInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(appInstancesPerc)))
@@ -203,7 +206,10 @@ func listApps(cliConnection plugin.CliConnection) {
 									if serviceInstances, err := conf.CfClient.ServiceInstances.ListAll(context.Background(), &client.ServiceInstanceListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
 										fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get service instances: %s", err)))
 									} else {
-										serviceInstancesPerc := 100 * len(serviceInstances) / serviceInstancesQuota
+										serviceInstancesPerc := 0
+										if serviceInstancesQuota != 0 {
+											serviceInstancesPerc = 100 * len(serviceInstances) / serviceInstancesQuota
+										}
 										serviceInstancesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
 										if serviceInstancesPerc > 80 {
 											serviceInstancesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(serviceInstancesPerc)))
@@ -214,7 +220,10 @@ func listApps(cliConnection plugin.CliConnection) {
 									if routes, err := conf.CfClient.Routes.ListAll(context.Background(), &client.RouteListOptions{ListOptions: &client.ListOptions{}, SpaceGUIDs: client.Filter{Values: []string{currentSpace.Guid}}}); err != nil {
 										fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get routes: %s", err)))
 									} else {
-										routesPerc := 100 * len(routes) / routesQuota
+										routesPerc := 0
+										if routesQuota != 0 {
+											routesPerc = 100 * len(routes) / routesQuota
+										}
 										routesPercColored := terminal.SuccessColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
 										if routesPerc > 80 {
 											routesPercColored = terminal.FailureColor(fmt.Sprintf("%7s", strconv.Itoa(routesPerc)))
@@ -225,12 +234,12 @@ func listApps(cliConnection plugin.CliConnection) {
 									table.Add("memory", fmt.Sprintf("%5s", getFormattedUnit(totalMemoryUsed*1024*1024)), fmt.Sprintf("%10s", getFormattedUnit(totalMemory*1024*1024)), fmt.Sprintf("%5s", getFormattedUnit(memQuota*1024*1024)), memPercColored)
 									table.Add("log_rate", fmt.Sprintf("%5s", getFormattedUnit(totalLogUsed)), fmt.Sprintf("%10s", getFormattedUnit(totalLog)), fmt.Sprintf("%5s", getFormattedUnit(logQuota)), logPercColored)
 
+									_ = table.PrintTo(os.Stdout)
 								}
 							} else {
 								fmt.Printf("No space quota found for space %s\n", terminal.EntityNameColor(conf.CurrentSpace.Name))
 							}
 						}
-						_ = table.PrintTo(os.Stdout)
 					}
 				}
 			}
@@ -454,12 +463,12 @@ func getColValue(process *resource.Process, colName string) string {
 			if actualType, ok := appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle); ok {
 				return strings.Join(actualType.Buildpacks, ",")
 			}
-			if _, ok := appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.DockerLifecycle); ok {
-				return "<DOCKER>"
-			}
-			return strings.Join(appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle).Buildpacks, ",")
+			return "<DOCKER>"
 		case colStack:
-			return appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle).Stack
+			if actualType, ok := appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle); ok {
+				return actualType.Stack
+			}
+			return "<DOCKER>"
 		case colHealthCheck:
 			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:
@@ -500,7 +509,7 @@ func getProcessStats(processes []*resource.Process) map[string]*resource.Process
 			if !(process.Type == "task" && process.Instances == 0) {
 				atomic.AddInt32(concurrencyCounterP, 1)
 				// throttle a bit:
-				time.Sleep(time.Millisecond * 25 * time.Duration(concurrencyCounter))
+				time.Sleep(time.Millisecond * 25 * time.Duration(atomic.LoadInt32(concurrencyCounterP)))
 				go getProcessStat(process)
 			}
 		}
@@ -509,7 +518,7 @@ func getProcessStats(processes []*resource.Process) map[string]*resource.Process
 	// wait for all routines to end:
 	for {
 		time.Sleep(time.Millisecond * 100)
-		if concurrencyCounter == 0 {
+		if atomic.LoadInt32(concurrencyCounterP) == 0 {
 			break
 		}
 	}
@@ -520,8 +529,7 @@ func getProcessStats(processes []*resource.Process) map[string]*resource.Process
 func getProcessStat(process *resource.Process) {
 	defer atomic.AddInt32(concurrencyCounterP, -1)
 	if stat, err := conf.CfClient.Processes.GetStats(conf.CfCtx, process.GUID); err != nil {
-		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get process stats: %s", err)))
-		os.Exit(1)
+		fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get process stats for %s: %s", appData[process.Relationships.App.Data.GUID].Name, err)))
 	} else {
 		processMutex.Lock()
 		processStats[process.GUID] = stat
