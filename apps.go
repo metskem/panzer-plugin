@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -447,9 +448,8 @@ func getColValue(process *resource.Process, colName string) string {
 		case colState:
 			if appData[process.Relationships.App.Data.GUID].State == "STOPPED" {
 				return terminal.StoppedColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
-			} else {
-				return terminal.SuccessColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
 			}
+			return terminal.SuccessColor(strings.ToLower(appData[process.Relationships.App.Data.GUID].State))
 		case colMemory:
 			return fmt.Sprintf("%6s", getFormattedUnit(process.MemoryInMB*1024*1024))
 		case colLogRate:
@@ -498,12 +498,7 @@ func isInstanceColumn(name string) bool {
 	if name == colIx {
 		return true
 	}
-	for _, instanceColumn := range InstanceLevelColumns {
-		if name == instanceColumn {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(InstanceLevelColumns, name)
 }
 
 /** getProcessStats - Iterate over all processes and get the stats from them (concurrently) */
