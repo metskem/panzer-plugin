@@ -25,6 +25,7 @@ var (
 	appData             = make(map[string]*resource.App)
 	processes           = make([]*resource.Process, 0)
 	processStats        = make(map[string]*resource.ProcessStats)
+	dropletData         = make(map[string]*resource.Droplet)
 	processMutex        sync.Mutex
 	concurrencyCounter  int32
 	concurrencyCounterP *int32
@@ -71,7 +72,9 @@ const (
 	colCreated                      = "Created"
 	colUpdated                      = "Updated"
 	colBuildpacks                   = "Buildpacks"
-	colStack                        = "Stack"
+	colBuildpacksVersion            = "BuildpacksVersion"
+	colStackApp                     = "StackApp"
+	colStackDroplet                 = "StackDroplet"
 	colHealthCheck                  = "HealthCheck"
 	colHealthCheckInvocationTimeout = "InvocTmout"
 	colHealthCheckTimeout           = "Tmout"
@@ -84,8 +87,9 @@ const (
 )
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colStack, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
+var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colBuildpacksVersion, colStackApp, colStackDroplet, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
+var DropletColumns = []string{colStackDroplet}
 
 /** listApps - The main function to produce the response. */
 func listApps(cliConnection plugin.CliConnection) {
@@ -134,6 +138,11 @@ func listApps(cliConnection plugin.CliConnection) {
 				// optionally get the stats (per instance stats)
 				if processStatsRequired(colNames) {
 					processStats = getProcessStats(processes)
+				}
+				//
+				// optionally get the droplet data
+				if dropletDataRequired(colNames) {
+					dropletData = getDropletData(apps)
 				}
 
 				table := terminal.NewTable(colNames)
@@ -313,6 +322,18 @@ func processStatsRequired(colNames []string) bool {
 	return isProcessColumn
 }
 
+func dropletDataRequired(colNames []string) bool {
+	var isDropletColumn = false
+	for _, colName := range colNames {
+		for _, dropletColumn := range DropletColumns {
+			if colName == dropletColumn {
+				isDropletColumn = true
+			}
+		}
+	}
+	return isDropletColumn
+}
+
 /** getRequestedColNames - Find out what the desired columns are specified in the envvar CF_COLS, or use the default set of columns */
 func getRequestedColNames() []string {
 	requestedColumns := os.Getenv("CF_COLS")
@@ -469,11 +490,18 @@ func getColValue(process *resource.Process, colName string) string {
 				return strings.Join(actualType.Buildpacks, ",")
 			}
 			return "<DOCKER>"
-		case colStack:
+		case colBuildpacksVersion:
+			if dropletData[process.Relationships.App.Data.GUID] != nil && dropletData[process.Relationships.App.Data.GUID].Buildpacks != nil {
+				return dropletData[process.Relationships.App.Data.GUID].Buildpacks[0].Version
+			}
+			return "-"
+		case colStackApp:
 			if actualType, ok := appData[process.Relationships.App.Data.GUID].Lifecycle.Data.(*resource.BuildpackLifecycle); ok {
 				return actualType.Stack
 			}
 			return "<DOCKER>"
+		case colStackDroplet:
+			return dropletData[process.Relationships.App.Data.GUID].Stack
 		case colHealthCheck:
 			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:
@@ -523,6 +551,22 @@ func getProcessStats(processes []*resource.Process) map[string]*resource.Process
 		}
 	}
 	return processStats
+}
+
+func getDropletData(apps []*resource.App) map[string]*resource.Droplet {
+	droplets := make(map[string]*resource.Droplet)
+	for _, app := range apps {
+		if conf.AppNameRegex.MatchString(app.Name) {
+			if app.Relationships.CurrentDroplet.Data != nil {
+				if droplet, err := conf.CfClient.Droplets.Get(conf.CfCtx, app.Relationships.CurrentDroplet.Data.GUID); err != nil {
+					fmt.Println(terminal.FailureColor(fmt.Sprintf("failed to get droplet for %s: %s", app.Name, err)))
+				} else {
+					droplets[app.GUID] = droplet
+				}
+			}
+		}
+	}
+	return droplets
 }
 
 /** getProcessStat - Perform a http request to get the stats. This function is called concurrently. */
