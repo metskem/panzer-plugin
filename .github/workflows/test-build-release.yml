@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Go version
         uses: actions/setup-go@v7
         with:
@@ -53,7 +53,7 @@ jobs:
           VERSION: ${{ env.VERSION }}
         run: .github/scripts/build.sh
       - name: upload panzer-plugin
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -64,7 +64,7 @@ jobs:
     needs: build-job
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install versioning tool
         run: go install github.com/xchapter7x/versioning@latest
       - name: Determine Version
@@ -72,7 +72,7 @@ jobs:
         run: |
           echo VERSION=$(~/go/bin/versioning bump_patch) >> ${GITHUB_ENV}
       - name: Download Artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
