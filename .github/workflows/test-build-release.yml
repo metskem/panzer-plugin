@@ -7,9 +7,30 @@ on:
       - main
 
 jobs:
+  check-pr-author:
+    name: Check merged PR author
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check whether the pushed commit belongs to a Dependabot PR
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          is_dependabot=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq 'any(.[]; .user.login == "dependabot[bot]")')
+          if [[ "$is_dependabot" == "true" ]]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-job:
     name: Build panzer-plugin
-    if: github.actor != 'dependabot[bot]'
+    needs: check-pr-author
+    if: needs.check-pr-author.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
