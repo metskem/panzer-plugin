@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"code.cloudfoundry.org/cli/cf/i18n"
-	"code.cloudfoundry.org/cli/cf/terminal"
-	"code.cloudfoundry.org/cli/plugin"
-	"code.cloudfoundry.org/cli/util/configv3"
+	"code.cloudfoundry.org/cli/v8/cf/i18n"
+	"code.cloudfoundry.org/cli/v8/cf/terminal"
+	"code.cloudfoundry.org/cli/v8/plugin"
+	"code.cloudfoundry.org/cli/v8/util/configv3"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/metskem/panzer-plugin/conf"
@@ -25,7 +25,7 @@ var (
 	ListRoutesUsage = "lr [-t] <-r host-to-lookup>, use \"cf lr -help\" for full help message- Specify the host without the domain name, we will find all routes using this hostname, if option -t given we will also target the org/space"
 )
 
-// PanzerPlugin is the struct implementing the interface defined by the core CLI. It can be found at  "code.cloudfoundry.org/cli/plugin/plugin.go"
+// PanzerPlugin is the struct implementing the interface defined by the core CLI. It can be found at  "code.cloudfoundry.org/cli/v8/plugin/plugin.go"
 type PanzerPlugin struct{}
 
 // Run must be implemented by any plugin because it is part of the plugin interface defined by the core CLI.
@@ -116,7 +116,7 @@ func preCheck(cliConnection plugin.CliConnection) {
 func main() {
 	// Any initialization for your plugin can be handled here
 	//
-	// Note: to run the plugin.Start method, we pass in a pointer to the struct implementing the interface defined at "code.cloudfoundry.org/cli/plugin/plugin.go"
+	// Note: to run the plugin.Start method, we pass in a pointer to the struct implementing the interface defined at "code.cloudfoundry.org/cli/v8/plugin/plugin.go"
 	//
 	// Note: The plugin's main() method is invoked at install time to collect metadata. The plugin will exit 0 and the Run([]string) method will not be invoked.
 	plugin.Start(new(PanzerPlugin))

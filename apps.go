@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"code.cloudfoundry.org/cli/cf/terminal"
-	"code.cloudfoundry.org/cli/plugin"
+	"code.cloudfoundry.org/cli/v8/cf/terminal"
+	"code.cloudfoundry.org/cli/v8/plugin"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/integrii/flaggy"
@@ -75,6 +75,7 @@ const (
 	colBuildpacksVersion            = "BuildpacksVersion"
 	colStackApp                     = "StackApp"
 	colStackDroplet                 = "StackDroplet"
+	colDropletLastUpdated           = "DropletLastUpdated"
 	colHealthCheck                  = "HealthCheck"
 	colHealthCheckInvocationTimeout = "InvocTmout"
 	colHealthCheckTimeout           = "Tmout"
@@ -87,9 +88,9 @@ const (
 )
 
 var DefaultColumns = []string{colAppName, colState, colMemory, colDisk, colUpdated, colHealthCheck, colInstances, colHost, colProcState, colUptime, colCpu, colMemUsed}
-var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colBuildpacksVersion, colStackApp, colStackDroplet, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
+var ValidColumns = []string{colAppName, colState, colMemory, colLogRate, colDisk, colType, colInstances, colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colCreated, colUpdated, colBuildpacks, colBuildpacksVersion, colStackApp, colStackDroplet, colDropletLastUpdated, colHealthCheck, colHealthCheckInvocationTimeout, colHealthCheckTimeout, colGuid, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
 var InstanceLevelColumns = []string{colHost, colCpu, colMemUsed, colDiskUsed, colLogRateUsed, colProcState, colProcType, colUptime, colInstancePorts, colIsoSeg}
-var DropletColumns = []string{colStackDroplet}
+var DropletColumns = []string{colStackDroplet, colDropletLastUpdated}
 
 /** listApps - The main function to produce the response. */
 func listApps(cliConnection plugin.CliConnection) {
@@ -501,7 +502,15 @@ func getColValue(process *resource.Process, colName string) string {
 			}
 			return "<DOCKER>"
 		case colStackDroplet:
-			return dropletData[process.Relationships.App.Data.GUID].Stack
+			if droplet := dropletData[process.Relationships.App.Data.GUID]; droplet != nil {
+				return droplet.Stack
+			}
+			return "-"
+		case colDropletLastUpdated:
+			if droplet := dropletData[process.Relationships.App.Data.GUID]; droplet != nil {
+				return droplet.UpdatedAt.Format(time.RFC3339)
+			}
+			return "-"
 		case colHealthCheck:
 			return fmt.Sprintf("%11s", process.HealthCheck.Type)
 		case colHealthCheckInvocationTimeout:

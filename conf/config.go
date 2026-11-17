@@ -1,10 +1,11 @@
 package conf
 
 import (
-	pluginmodels "code.cloudfoundry.org/cli/plugin/models"
 	"context"
-	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"regexp"
+
+	pluginmodels "code.cloudfoundry.org/cli/v8/plugin/models"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
 )
 
 var (
